@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PluginVersion</key>
+    <string>2023.0.0</string>
+    <key>ServerApiVersion</key>
+    <string>3.0</string>
+    <key>IwsApiVersion</key>
+    <string>1.0.0</string>
+    <key>CFBundleName</key>
+    <string>ring-mqtt</string>
+    <key>CFBundleDisplayName</key>
+    <string>Ring MQTT</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.dws.indigoplugin.ring-mqtt</string>
+    <key>CFBundleVersion</key>
+    <string>0.0.0</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>http://forums.indigodomo.com/</string>
+        </dict>
+    </array>
+</dict>
+</plist>
