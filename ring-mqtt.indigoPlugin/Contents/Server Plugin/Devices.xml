@@ -1,17 +1,22 @@
 <?xml version="1.0"?>
 <Devices>
 	<SupportURL>http://forums.indigodomo.com/</SupportURL>
-	<Device type="sensor" subType="kSensorDeviceSubType.Motion" id="Ring Camera Motion">
-		<Name>Ring Doorbell</Name>
+	<Device type="sensor" subType="kSensorDeviceSubType.Motion" id="RingMotion">
+		<Name>Ring Motion</Name>
 		<ConfigUI>
 			<Field id="SupportsBatteryLevel" type="checkbox" defaultValue="true" hidden="true" />
 			<Field id="SupportsOnState" type="checkbox" defaultValue="true" hidden="true" />
 			<Field id="SupportsSensorValue" type="checkbox" defaultValue="false" hidden="true" />
+			<Field id="SupportsStatusRequest" type="checkbox" defaultValue="false" hidden="true" />
  			<Field id="address" type="textfield"  hidden="true" >
 				<Label/>
 			</Field>
+			<Field id="brokerID" type="menu">
+                <Label>MQTT Broker:</Label>
+                <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
+            </Field>
 			<Field id="doorbell" type="menu">
-				<Label>Ring Camera Motion:</Label>
+				<Label>Ring Motion:</Label>
 				<List class="self" filter="" method="get_ring_devices" dynamicReload="true"/>
 				<CallbackMethod>selectionChanged</CallbackMethod>
 			</Field>
@@ -19,7 +24,7 @@
 				<Label>Device ID:</Label>
 			</Field>
 			<Field type="textfield" id="name" readonly="true">
-				<Label>System Name:</Label>
+				<Label>Ring App Name:</Label>
 			</Field>
 			<Field type="textfield" id="manufacturer" readonly="true">
 				<Label>Manufacturer:</Label>
@@ -29,40 +34,25 @@
 			</Field>
 		</ConfigUI>
 		<States>
-			<State id="internalid">
+			<State id="motionDetectionEnabled">
 				<ValueType>String</ValueType>
-				<TriggerLabel>internalid</TriggerLabel>
-				<ControlPageLabel>internalid</ControlPageLabel>
+				<TriggerLabel>motionDetectionEnabled</TriggerLabel>
+				<ControlPageLabel>motionDetectionEnabled</ControlPageLabel>
 			</State>
-			<State id="lastEventId">
+			<State id="motion_duration">
 				<ValueType>String</ValueType>
-				<TriggerLabel>lastEventId</TriggerLabel>
-				<ControlPageLabel>lastEventId</ControlPageLabel>
-			</State>
-			<State id="lastEvent">
-				<ValueType>String</ValueType>
-				<TriggerLabel>lastEvent</TriggerLabel>
-				<ControlPageLabel>lastEvent</ControlPageLabel>
+				<TriggerLabel>motion_duration</TriggerLabel>
+				<ControlPageLabel>motion_duration</ControlPageLabel>
 			</State>
 			<State id="lastMotionTime">
 				<ValueType>String</ValueType>
 				<TriggerLabel>lastMotionTime</TriggerLabel>
 				<ControlPageLabel>lastMotionTime</ControlPageLabel>
 			</State>
-			<State id="lastButtonPressTime">
+			<State id="personDetected">
 				<ValueType>String</ValueType>
-				<TriggerLabel>lastButtonPressTime</TriggerLabel>
-				<ControlPageLabel>lastButtonPressTime</ControlPageLabel>
-			</State>
-			<State id="lastEventTime">
-				<ValueType>String</ValueType>
-				<TriggerLabel>lastEventTime</TriggerLabel>
-				<ControlPageLabel>lastEventTime</ControlPageLabel>
-			</State>
-			<State id="lastAnswered">
-				<ValueType>Boolean</ValueType>
-				<TriggerLabel>lastAnswered</TriggerLabel>
-				<ControlPageLabel>lastAnswered</ControlPageLabel>
+				<TriggerLabel>personDetected</TriggerLabel>
+				<ControlPageLabel>personDetected</ControlPageLabel>
 			</State>
 			<State id="model">
 				<ValueType>String</ValueType>
@@ -81,14 +71,22 @@
 			</State>
 		</States>
 	</Device>
-	<Device type="relay" id="RingFloodLight">
-		<Name>Ring FloodLight</Name>
+	<Device type="relay" subType="" id="RingLight">
+		<Name>Ring Light</Name>
 		<ConfigUI>
-			<Field id="address" type="textfield"  hidden="true" >
+			<Field id="SupportsBatteryLevel" type="checkbox" defaultValue="true" hidden="true" />
+			<Field id="SupportsOnState" type="checkbox" defaultValue="true" hidden="true" />
+			<Field id="SupportsSensorValue" type="checkbox" defaultValue="false" hidden="true" />
+			<Field id="SupportsStatusRequest" type="checkbox" defaultValue="false" hidden="true" />
+ 			<Field id="address" type="textfield"  hidden="true" >
 				<Label/>
 			</Field>
+			<Field id="brokerID" type="menu">
+                <Label>MQTT Broker:</Label>
+                <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
+            </Field>
 			<Field id="doorbell" type="menu">
-				<Label>Ring FloodLight:</Label>
+				<Label>Ring Light:</Label>
 				<List class="self" filter="" method="get_ring_devices" dynamicReload="true"/>
 				<CallbackMethod>selectionChanged</CallbackMethod>
 			</Field>
@@ -96,113 +94,35 @@
 				<Label>Device ID:</Label>
 			</Field>
 			<Field type="textfield" id="name" readonly="true">
-				<Label>System Name:</Label>
+				<Label>Ring App Name:</Label>
 			</Field>
-			<Field type="textfield" id="kind" readonly="true">
-				<Label>System Type:</Label>
+			<Field type="textfield" id="manufacturer" readonly="true">
+				<Label>Manufacturer:</Label>
 			</Field>
-			<Field type="textfield" id="firmware" readonly="true">
-				<Label>Firmware Version:</Label>
+			<Field type="textfield" id="model" readonly="true">
+				<Label>Model:</Label>
 			</Field>
 		</ConfigUI>
 		<States>
-			<State id="name">
+			<State id="motionDetectionEnabled">
 				<ValueType>String</ValueType>
-				<TriggerLabel>name</TriggerLabel>
-				<ControlPageLabel>name</ControlPageLabel>
+				<TriggerLabel>motionDetectionEnabled</TriggerLabel>
+				<ControlPageLabel>motionDetectionEnabled</ControlPageLabel>
 			</State>
-			<State id="lastEventId">
+			<State id="motion_duration">
 				<ValueType>String</ValueType>
-				<TriggerLabel>lastEventId</TriggerLabel>
-				<ControlPageLabel>lastEventId</ControlPageLabel>
-			</State>
-			<State id="lastEvent">
-				<ValueType>String</ValueType>
-				<TriggerLabel>lastEvent</TriggerLabel>
-				<ControlPageLabel>lastEvent</ControlPageLabel>
+				<TriggerLabel>motion_duration</TriggerLabel>
+				<ControlPageLabel>motion_duration</ControlPageLabel>
 			</State>
 			<State id="lastMotionTime">
 				<ValueType>String</ValueType>
 				<TriggerLabel>lastMotionTime</TriggerLabel>
 				<ControlPageLabel>lastMotionTime</ControlPageLabel>
 			</State>
-			<State id="lastEventTime">
+			<State id="personDetected">
 				<ValueType>String</ValueType>
-				<TriggerLabel>lastEventTime</TriggerLabel>
-				<ControlPageLabel>lastEventTime</ControlPageLabel>
-			</State>
-			<State id="lastAnswered">
-				<ValueType>Boolean</ValueType>
-				<TriggerLabel>lastAnswered</TriggerLabel>
-				<ControlPageLabel>lastAnswered</ControlPageLabel>
-			</State>
-			<State id="model">
-				<ValueType>String</ValueType>
-				<TriggerLabel>model</TriggerLabel>
-				<ControlPageLabel>model</ControlPageLabel>
-			</State>
-			<State id="firmware">
-				<ValueType>String</ValueType>
-				<TriggerLabel>firmware</TriggerLabel>
-				<ControlPageLabel>firmware</ControlPageLabel>
-			</State>
-		</States>
-	</Device>
-	<Device type="custom" id="RingStickupCam">
-		<Name>Ring Stickup Cam</Name>
-		<ConfigUI>
-			<Field id="address" type="textfield"  hidden="true" >
-				<Label/>
-			</Field>
-			<Field id="doorbell" type="menu">
-				<Label>Ring Stickup Cam:</Label>
-				<List class="self" filter="" method="get_ring_devices" dynamicReload="true" />
-				<CallbackMethod>selectionChanged</CallbackMethod>
-			</Field>
-			<Field type="textfield" id="doorbellId" readonly="true">
-				<Label>Device ID:</Label>
-			</Field>
-			<Field type="textfield" id="name" readonly="true">
-				<Label>System Name:</Label>
-			</Field>
-			<Field type="textfield" id="kind" readonly="true">
-				<Label>System Type:</Label>
-			</Field>
-			<Field type="textfield" id="firmware" readonly="true">
-				<Label>Firmware Version:</Label>
-			</Field>
-		</ConfigUI>
-		<UiDisplayStateId>batteryLevel</UiDisplayStateId>
-		<States>
-			<State id="name">
-				<ValueType>String</ValueType>
-				<TriggerLabel>name</TriggerLabel>
-				<ControlPageLabel>name</ControlPageLabel>
-			</State>
-			<State id="lastEventId">
-				<ValueType>String</ValueType>
-				<TriggerLabel>lastEventId</TriggerLabel>
-				<ControlPageLabel>lastEventId</ControlPageLabel>
-			</State>
-			<State id="lastEvent">
-				<ValueType>String</ValueType>
-				<TriggerLabel>lastEvent</TriggerLabel>
-				<ControlPageLabel>lastEvent</ControlPageLabel>
-			</State>
-			<State id="lastMotionTime">
-				<ValueType>String</ValueType>
-				<TriggerLabel>lastMotionTime</TriggerLabel>
-				<ControlPageLabel>lastMotionTime</ControlPageLabel>
-			</State>
-			<State id="lastEventTime">
-				<ValueType>String</ValueType>
-				<TriggerLabel>lastEventTime</TriggerLabel>
-				<ControlPageLabel>lastEventTime</ControlPageLabel>
-			</State>
-			<State id="lastAnswered">
-				<ValueType>Boolean</ValueType>
-				<TriggerLabel>lastAnswered</TriggerLabel>
-				<ControlPageLabel>lastAnswered</ControlPageLabel>
+				<TriggerLabel>personDetected</TriggerLabel>
+				<ControlPageLabel>personDetected</ControlPageLabel>
 			</State>
 			<State id="model">
 				<ValueType>String</ValueType>
@@ -215,9 +135,149 @@
 				<ControlPageLabel>firmware</ControlPageLabel>
 			</State>
 			<State id="batteryLevel">
-				<ValueType>Integer</ValueType>
-				<TriggerLabel>Battery Power Level (Percentage)</TriggerLabel>
-				<ControlPageLabel>Battery Power Level (Percentage)</ControlPageLabel>
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel</TriggerLabel>
+				<ControlPageLabel>batteryLevel</ControlPageLabel>
+			</State>
+		</States>
+	</Device>
+	<Device type="custom" subType="kDeviceSubType.Camera" id="RingCamera">
+		<Name>Ring Camera</Name>
+		<ConfigUI>
+			<Field id="SupportsBatteryLevel" type="checkbox" defaultValue="true" hidden="true" />
+			<Field id="SupportsOnState" type="checkbox" defaultValue="true" hidden="true" />
+			<Field id="SupportsSensorValue" type="checkbox" defaultValue="false" hidden="true" />
+			<Field id="SupportsStatusRequest" type="checkbox" defaultValue="false" hidden="true" />
+ 			<Field id="address" type="textfield"  hidden="true" >
+				<Label/>
+			</Field>
+			<Field id="brokerID" type="menu">
+                <Label>MQTT Broker:</Label>
+                <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
+            </Field>
+			<Field id="doorbell" type="menu">
+				<Label>Ring Camera:</Label>
+				<List class="self" filter="" method="get_ring_devices" dynamicReload="true"/>
+				<CallbackMethod>selectionChanged</CallbackMethod>
+			</Field>
+			<Field type="textfield" id="doorbellId" readonly="true">
+				<Label>Device ID:</Label>
+			</Field>
+			<Field type="textfield" id="name" readonly="true">
+				<Label>Ring App Name:</Label>
+			</Field>
+			<Field type="textfield" id="manufacturer" readonly="true">
+				<Label>Manufacturer:</Label>
+			</Field>
+			<Field type="textfield" id="model" readonly="true">
+				<Label>Model:</Label>
+			</Field>
+		</ConfigUI>
+		<States>
+			<State id="motionDetectionEnabled">
+				<ValueType>String</ValueType>
+				<TriggerLabel>motionDetectionEnabled</TriggerLabel>
+				<ControlPageLabel>motionDetectionEnabled</ControlPageLabel>
+			</State>
+			<State id="motion_duration">
+				<ValueType>String</ValueType>
+				<TriggerLabel>motion_duration</TriggerLabel>
+				<ControlPageLabel>motion_duration</ControlPageLabel>
+			</State>
+			<State id="lastMotionTime">
+				<ValueType>String</ValueType>
+				<TriggerLabel>lastMotionTime</TriggerLabel>
+				<ControlPageLabel>lastMotionTime</ControlPageLabel>
+			</State>
+			<State id="personDetected">
+				<ValueType>String</ValueType>
+				<TriggerLabel>personDetected</TriggerLabel>
+				<ControlPageLabel>personDetected</ControlPageLabel>
+			</State>
+			<State id="model">
+				<ValueType>String</ValueType>
+				<TriggerLabel>model</TriggerLabel>
+				<ControlPageLabel>model</ControlPageLabel>
+			</State>
+			<State id="firmware">
+				<ValueType>String</ValueType>
+				<TriggerLabel>firmware</TriggerLabel>
+				<ControlPageLabel>firmware</ControlPageLabel>
+			</State>
+			<State id="batteryLevel">
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel</TriggerLabel>
+				<ControlPageLabel>batteryLevel</ControlPageLabel>
+			</State>
+		</States>
+	</Device>
+	<Device type="relay" subType="kRelayDeviceSubType.Doorbell" id="RingDoorbell">
+		<Name>Ring Doorbell</Name>
+		<ConfigUI>
+			<Field id="SupportsBatteryLevel" type="checkbox" defaultValue="true" hidden="true" />
+			<Field id="SupportsOnState" type="checkbox" defaultValue="true" hidden="true" />
+			<Field id="SupportsSensorValue" type="checkbox" defaultValue="false" hidden="true" />
+			<Field id="SupportsStatusRequest" type="checkbox" defaultValue="false" hidden="true" />
+ 			<Field id="address" type="textfield"  hidden="true" >
+				<Label/>
+			</Field>
+			<Field id="brokerID" type="menu">
+                <Label>MQTT Broker:</Label>
+                <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
+            </Field>
+			<Field id="doorbell" type="menu">
+				<Label>Ring Doorbell:</Label>
+				<List class="self" filter="" method="get_ring_devices" dynamicReload="true"/>
+				<CallbackMethod>selectionChanged</CallbackMethod>
+			</Field>
+			<Field type="textfield" id="doorbellId" readonly="true">
+				<Label>Device ID:</Label>
+			</Field>
+			<Field type="textfield" id="name" readonly="true">
+				<Label>Ring App Name:</Label>
+			</Field>
+			<Field type="textfield" id="manufacturer" readonly="true">
+				<Label>Manufacturer:</Label>
+			</Field>
+			<Field type="textfield" id="model" readonly="true">
+				<Label>Model:</Label>
+			</Field>
+		</ConfigUI>
+		<States>
+			<State id="motionDetectionEnabled">
+				<ValueType>String</ValueType>
+				<TriggerLabel>motionDetectionEnabled</TriggerLabel>
+				<ControlPageLabel>motionDetectionEnabled</ControlPageLabel>
+			</State>
+			<State id="motion_duration">
+				<ValueType>String</ValueType>
+				<TriggerLabel>motion_duration</TriggerLabel>
+				<ControlPageLabel>motion_duration</ControlPageLabel>
+			</State>
+			<State id="lastMotionTime">
+				<ValueType>String</ValueType>
+				<TriggerLabel>lastMotionTime</TriggerLabel>
+				<ControlPageLabel>lastMotionTime</ControlPageLabel>
+			</State>
+			<State id="personDetected">
+				<ValueType>String</ValueType>
+				<TriggerLabel>personDetected</TriggerLabel>
+				<ControlPageLabel>personDetected</ControlPageLabel>
+			</State>
+			<State id="model">
+				<ValueType>String</ValueType>
+				<TriggerLabel>model</TriggerLabel>
+				<ControlPageLabel>model</ControlPageLabel>
+			</State>
+			<State id="firmware">
+				<ValueType>String</ValueType>
+				<TriggerLabel>firmware</TriggerLabel>
+				<ControlPageLabel>firmware</ControlPageLabel>
+			</State>
+			<State id="batteryLevel">
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel</TriggerLabel>
+				<ControlPageLabel>batteryLevel</ControlPageLabel>
 			</State>
 		</States>
 	</Device>
