@@ -1,25 +1,23 @@
-# Indigo-ratgdo
-Plugin for the Indigo Home Automation system to communicate with the ratgdo controller via MQTT
+# Indigo-ring-mqtt
+Plugin for the Indigo Home Automation system to communicate with ring devices via MQTT.
 
-If you didn't know, [b]ratgdo[/b] is an acronym for Rage Against The Garage Door Opener.  With a ratgdo device, you can regain control of your MyQ GDO.  Or any GDO using dry contact relays.  It uses MQTT to send status updates and receive commands.
+The plugin requires the ring-mqtt project (link) to be running on your network.  The preferred method is in a docker container.  The ring-mqtt project is straightforward to install and configure to talk with the ring API. It uses MQTT to send status updates and receive commands.
 
-The plugin requires the MQTT Connector plugin (https://www.indigodomo.com/pluginstore/211/) and an MQTT Broker (such as https://www.indigodomo.com/pluginstore/260/).
+The plugin also requires the MQTT Connector plugin (https://www.indigodomo.com/pluginstore/211/) and an MQTT Broker (such as https://www.indigodomo.com/pluginstore/260/).
 
 ## Installation
 
 Install and configure your MQTT Broker.
 
 Install the MQTT Connector plugin and configure it to connect to your MQTT Broker.  Subscribe to the 
-ratgdo topic ("ratgdo/#"). 
+ring topic ("ring/#") as well as the homeassistant topic ("homeassistant/#). 
 
-Install ratgdo controller per the instructions at https://paulwieland.github.io/ratgdo/. Install the 
-default firmware for MQTT support.  Configure the controller to connect to your MQTT broker. Set the
-MQTT topic prefix to "ratgdo/"
+Install the ring-mqtt docker container and configure it to connect to your MQTT broker. Set the
+MQTT topic prefix to "ring/"
 
-Install the plugin as usual.  Create a new ratgdo device and enter the name of the controller (same as
-the "Device Name" in the ratgdo configuration).
+Install the plugin as usual.  And then go ahead and create your ring devices in Indigo.  You can pick the associated ring device from the list.
+
+Currently the plugin supports Cameras, Doorbells, Chimes and Lighting.   It exposes them in Indigo as Cameras, Motion, Lights, Doorbells, Sirens and Chimes.  I will be adding ring alarm devices in the future.  Each ring device translates into one or more Indigo devices.  For example, a ring camera could have an Indigo Camera device, Indigo Motion device, Indigo Light device and Indigo Siren device.  Battery Level is also supported.
 
 Create a trigger using the plugin Menu command.  This is only done once.
 
-Since Indigo does not have a cover (door) device, the plugin represents the door as a lock device. 
-The device is locked when the door is closed and unlocked when the door is open.
