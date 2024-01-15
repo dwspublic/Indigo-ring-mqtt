@@ -2,7 +2,7 @@
 <PluginConfig>
     <SupportURL>http://forums.indigodomo.com/</SupportURL>
     <Field id="version" type="textfield" defaultValue="" hidden="True"/>
-    <Field id="ring_devices" type="textfield" defaultValue="" hidden="True"/>
+    <Field id="ring_devices" type="textfield" defaultValue="{}" hidden="True"/>
     <Field id="logLevel" type="menu" defaultValue="20">
         <Label>Event Logging Level:</Label>
         <List>
