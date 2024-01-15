@@ -9,8 +9,8 @@ try:
 except ImportError:
     pass
 
-
 RINGMQTT_MESSAGE_TYPE = "##ring##"
+
 
 ################################################################################
 class Plugin(indigo.PluginBase):
@@ -47,6 +47,7 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         self.logger.info("Starting ringmqtt")
         indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
+
     def shutdown(self):
         self.logger.info("Stopping ringmqtt")
         self.pluginPrefs["ring_devices"] = str(self.ring_devices)
@@ -82,14 +83,13 @@ class Plugin(indigo.PluginBase):
             payload = message_data["payload"]
 
             if topic_parts[0] == "ring":
-                #self.ring_locations = topic_parts[1]
                 for device_id in self.ringmqtt_devices:
                     device = indigo.devices[device_id]
 
                     ringdevice_id = topic_parts[1] + "-" + device.deviceTypeId[4:5] + "-" + topic_parts[3]
 
                     if ringdevice_id != device.address:     # wrong device
-                      continue
+                        continue
 
                     if topic_parts[2] == "camera":
                         if topic_parts[4] == "status":
@@ -150,7 +150,6 @@ class Plugin(indigo.PluginBase):
                         if topic_parts[4] == "beam_duration" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
                             device.updateStateOnServer(key="beam_duration", value=payload)
 
-
             if topic_parts[0] == "homeassistant":
                 if topic_parts[1] == "binary_sensor":
                     if "_motion" in topic_parts[3]:
@@ -181,6 +180,7 @@ class Plugin(indigo.PluginBase):
                         q = p["device"]
                         self.ring_devices[topic_parts[2] + "-L-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingLight"]
                         continue
+
     @staticmethod
     def get_mqtt_connectors(filter="", valuesDict=None, typeId="", targetId=0):
         retList = []
@@ -210,13 +210,13 @@ class Plugin(indigo.PluginBase):
             valuesDict["manufacturer"] = self.ring_devices[valuesDict["doorbell"]][1]
             valuesDict["model"] = self.ring_devices[valuesDict["doorbell"]][2]
 
-        # self.debugLog(u"\tSelectionChanged valuesDict to be returned:\n%s" % (str(valuesDict)))
+        #self.logger.debug(u"\tSelectionChanged valuesDict to be returned:\n%s" % (str(valuesDict)))
         return valuesDict
 
     def force_ha_messages(self, valuesDict, typeId):
 
         brokerID = int(valuesDict['brokerID'])
-        self.publish_topic(brokerID,"HA_Message_Refresh", f"haas/status","online")
+        self.publish_topic(brokerID, "HA_Message_Refresh", f"hass/status", "online")
         self.logger.info(f"Sent Haas/Status - online - devices should be updated shortly")
 
         return True
@@ -273,7 +273,7 @@ class Plugin(indigo.PluginBase):
             tLightType = "lighting"
             tCamCheck = self.ring_devices[device.address][4] + "-C-" + self.ring_devices[device.address][3]
             if self.ring_devices[tCamCheck][5] == "RingCamera":
-                    tLightType = "camera"
+                tLightType = "camera"
             self.publish_topic(brokerID, device.name, f"ring/{self.ring_devices[device.address][4]}/{tLightType}/{self.ring_devices[device.address][3]}/light/command", "OFF")
 
         elif action.deviceAction == indigo.kDeviceAction.TurnOn:
@@ -324,4 +324,3 @@ class Plugin(indigo.PluginBase):
             retList.append((device.id, device.name))
         retList.sort(key=lambda tup: tup[1])
         return retList
-
