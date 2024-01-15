@@ -31,7 +31,7 @@ class Plugin(indigo.PluginBase):
         self.ring_devices = {}
         self.ring_battery_devices = {}
 
-        if self.pluginPrefs["ring_devices"] is None:
+        if "ring_devices" not in self.pluginPrefs:
             self.pluginPrefs["ring_devices"] = str(self.ring_devices)
 
         self.ring_devices = eval(self.pluginPrefs["ring_devices"])
