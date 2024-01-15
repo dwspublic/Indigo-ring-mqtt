@@ -34,6 +34,11 @@
 			</Field>
 		</ConfigUI>
 		<States>
+			<State id="status">
+				<ValueType>String</ValueType>
+				<TriggerLabel>status</TriggerLabel>
+				<ControlPageLabel>status</ControlPageLabel>
+			</State>
 			<State id="motionDetectionEnabled">
 				<ValueType>String</ValueType>
 				<TriggerLabel>motionDetectionEnabled</TriggerLabel>
@@ -54,15 +59,10 @@
 				<TriggerLabel>personDetected</TriggerLabel>
 				<ControlPageLabel>personDetected</ControlPageLabel>
 			</State>
-			<State id="model">
+			<State id="firmwareStatus">
 				<ValueType>String</ValueType>
-				<TriggerLabel>model</TriggerLabel>
-				<ControlPageLabel>model</ControlPageLabel>
-			</State>
-			<State id="firmware">
-				<ValueType>String</ValueType>
-				<TriggerLabel>firmware</TriggerLabel>
-				<ControlPageLabel>firmware</ControlPageLabel>
+				<TriggerLabel>firmwareStatus</TriggerLabel>
+				<ControlPageLabel>firmwareStatus</ControlPageLabel>
 			</State>
 			<State id="batteryLevel">
 				<ValueType>String</ValueType>
@@ -104,35 +104,25 @@
 			</Field>
 		</ConfigUI>
 		<States>
-			<State id="motionDetectionEnabled">
+			<State id="status">
 				<ValueType>String</ValueType>
-				<TriggerLabel>motionDetectionEnabled</TriggerLabel>
-				<ControlPageLabel>motionDetectionEnabled</ControlPageLabel>
+				<TriggerLabel>status</TriggerLabel>
+				<ControlPageLabel>status</ControlPageLabel>
 			</State>
-			<State id="motion_duration">
+			<State id="beam_duration">
 				<ValueType>String</ValueType>
-				<TriggerLabel>motion_duration</TriggerLabel>
-				<ControlPageLabel>motion_duration</ControlPageLabel>
+				<TriggerLabel>beam_duration</TriggerLabel>
+				<ControlPageLabel>beam_duration</ControlPageLabel>
 			</State>
-			<State id="lastMotionTime">
+			<State id="brightness_state">
 				<ValueType>String</ValueType>
-				<TriggerLabel>lastMotionTime</TriggerLabel>
-				<ControlPageLabel>lastMotionTime</ControlPageLabel>
+				<TriggerLabel>brightness_state</TriggerLabel>
+				<ControlPageLabel>brightness_state</ControlPageLabel>
 			</State>
-			<State id="personDetected">
+			<State id="firmwareStatus">
 				<ValueType>String</ValueType>
-				<TriggerLabel>personDetected</TriggerLabel>
-				<ControlPageLabel>personDetected</ControlPageLabel>
-			</State>
-			<State id="model">
-				<ValueType>String</ValueType>
-				<TriggerLabel>model</TriggerLabel>
-				<ControlPageLabel>model</ControlPageLabel>
-			</State>
-			<State id="firmware">
-				<ValueType>String</ValueType>
-				<TriggerLabel>firmware</TriggerLabel>
-				<ControlPageLabel>firmware</ControlPageLabel>
+				<TriggerLabel>firmwareStatus</TriggerLabel>
+				<ControlPageLabel>firmwareStatus</ControlPageLabel>
 			</State>
 			<State id="batteryLevel">
 				<ValueType>String</ValueType>
@@ -174,35 +164,25 @@
 			</Field>
 		</ConfigUI>
 		<States>
-			<State id="motionDetectionEnabled">
+			<State id="status">
 				<ValueType>String</ValueType>
-				<TriggerLabel>motionDetectionEnabled</TriggerLabel>
-				<ControlPageLabel>motionDetectionEnabled</ControlPageLabel>
+				<TriggerLabel>status</TriggerLabel>
+				<ControlPageLabel>status</ControlPageLabel>
 			</State>
-			<State id="motion_duration">
+			<State id="stream_Source">
 				<ValueType>String</ValueType>
-				<TriggerLabel>motion_duration</TriggerLabel>
-				<ControlPageLabel>motion_duration</ControlPageLabel>
+				<TriggerLabel>stream_Source</TriggerLabel>
+				<ControlPageLabel>stream_Source</ControlPageLabel>
 			</State>
-			<State id="lastMotionTime">
+			<State id="still_Image_URL">
 				<ValueType>String</ValueType>
-				<TriggerLabel>lastMotionTime</TriggerLabel>
-				<ControlPageLabel>lastMotionTime</ControlPageLabel>
+				<TriggerLabel>still_Image_URL</TriggerLabel>
+				<ControlPageLabel>still_Image_URL</ControlPageLabel>
 			</State>
-			<State id="personDetected">
+			<State id="firmwareStatus">
 				<ValueType>String</ValueType>
-				<TriggerLabel>personDetected</TriggerLabel>
-				<ControlPageLabel>personDetected</ControlPageLabel>
-			</State>
-			<State id="model">
-				<ValueType>String</ValueType>
-				<TriggerLabel>model</TriggerLabel>
-				<ControlPageLabel>model</ControlPageLabel>
-			</State>
-			<State id="firmware">
-				<ValueType>String</ValueType>
-				<TriggerLabel>firmware</TriggerLabel>
-				<ControlPageLabel>firmware</ControlPageLabel>
+				<TriggerLabel>firmwareStatus</TriggerLabel>
+				<ControlPageLabel>firmwareStatus</ControlPageLabel>
 			</State>
 			<State id="batteryLevel">
 				<ValueType>String</ValueType>
@@ -244,35 +224,25 @@
 			</Field>
 		</ConfigUI>
 		<States>
-			<State id="motionDetectionEnabled">
+			<State id="status">
 				<ValueType>String</ValueType>
-				<TriggerLabel>motionDetectionEnabled</TriggerLabel>
-				<ControlPageLabel>motionDetectionEnabled</ControlPageLabel>
+				<TriggerLabel>status</TriggerLabel>
+				<ControlPageLabel>status</ControlPageLabel>
 			</State>
-			<State id="motion_duration">
+			<State id="ding_duration">
 				<ValueType>String</ValueType>
-				<TriggerLabel>motion_duration</TriggerLabel>
-				<ControlPageLabel>motion_duration</ControlPageLabel>
+				<TriggerLabel>ding_duration</TriggerLabel>
+				<ControlPageLabel>ding_duration</ControlPageLabel>
 			</State>
-			<State id="lastMotionTime">
+			<State id="lastDingTime">
 				<ValueType>String</ValueType>
-				<TriggerLabel>lastMotionTime</TriggerLabel>
-				<ControlPageLabel>lastMotionTime</ControlPageLabel>
+				<TriggerLabel>lastDingTime</TriggerLabel>
+				<ControlPageLabel>lastDingTime</ControlPageLabel>
 			</State>
-			<State id="personDetected">
+			<State id="firmwareStatus">
 				<ValueType>String</ValueType>
-				<TriggerLabel>personDetected</TriggerLabel>
-				<ControlPageLabel>personDetected</ControlPageLabel>
-			</State>
-			<State id="model">
-				<ValueType>String</ValueType>
-				<TriggerLabel>model</TriggerLabel>
-				<ControlPageLabel>model</ControlPageLabel>
-			</State>
-			<State id="firmware">
-				<ValueType>String</ValueType>
-				<TriggerLabel>firmware</TriggerLabel>
-				<ControlPageLabel>firmware</ControlPageLabel>
+				<TriggerLabel>firmwareStatus</TriggerLabel>
+				<ControlPageLabel>firmwareStatus</ControlPageLabel>
 			</State>
 			<State id="batteryLevel">
 				<ValueType>String</ValueType>

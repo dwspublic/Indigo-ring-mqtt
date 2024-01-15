@@ -28,23 +28,12 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"logLevel = {self.logLevel}")
 
         self.ringmqtt_devices = []
-        self.ring_cameras = {}
-        self.ring_motion_devices = {}
-        self.ring_light_devices = {}
-        self.ring_doorbells = {}
+        self.ring_devices = {}
         self.ring_battery_devices = {}
-        self.ring_chimes = {}
-        self.ring_locations = ""
 
-        #self.pluginPrefs["ring_cameras"] = str(self.ring_cameras)
-        #self.pluginPrefs["ring_motion_devices"] = str(self.ring_motion_devices)
-        #self.pluginPrefs["ring_light_devices"] = str(self.ring_light_devices)
-        #self.pluginPrefs["ring_doorbells"] = str(self.ring_doorbells)
+        #self.pluginPrefs["ring_devices"] = str(self.ring_devices)
 
-        self.ring_cameras = eval(self.pluginPrefs["ring_cameras"])
-        self.ring_motion_devices = eval(self.pluginPrefs["ring_motion_devices"])
-        self.ring_light_devices = eval(self.pluginPrefs["ring_light_devices"])
-        self.ring_doorbells = eval(self.pluginPrefs["ring_doorbells"])
+        self.ring_devices = eval(self.pluginPrefs["ring_devices"])
 
         self.mqttPlugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.mqtt")
         if not self.mqttPlugin.isEnabled():
@@ -59,10 +48,7 @@ class Plugin(indigo.PluginBase):
         indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
     def shutdown(self):
         self.logger.info("Stopping ringmqtt")
-        self.pluginPrefs["ring_cameras"] = str(self.ring_cameras)
-        self.pluginPrefs["ring_motion_devices"] = str(self.ring_motion_devices)
-        self.pluginPrefs["ring_light_devices"] = str(self.ring_light_devices)
-        self.pluginPrefs["ring_doorbells"] = str(self.ring_doorbells)
+        self.pluginPrefs["ring_devices"] = str(self.ring_devices)
 
     def message_handler(self, notification):
         self.logger.debug(f"message_handler: MQTT message {notification['message_type']} from {indigo.devices[int(notification['brokerID'])].name}")
@@ -95,14 +81,24 @@ class Plugin(indigo.PluginBase):
             payload = message_data["payload"]
 
             if topic_parts[0] == "ring":
-                self.ring_locations = topic_parts[1]
+                #self.ring_locations = topic_parts[1]
                 for device_id in self.ringmqtt_devices:
                     device = indigo.devices[device_id]
 
-                    if topic_parts[3] != device.address:     # wrong device
+                    ringdevice_id = topic_parts[1] + "-" + device.deviceTypeId[4:5] + "-" + topic_parts[3]
+
+                    if ringdevice_id != device.address:     # wrong device
                       continue
 
                     if topic_parts[2] == "camera":
+                        if topic_parts[4] == "status":
+                            device.updateStateOnServer(key="status", value=payload)
+                        if topic_parts[4] == "info":
+                            p = json.loads(payload)
+                            device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
+                            if device.deviceTypeId == "RingCamera":
+                                device.updateStateOnServer(key="stream_Source", value=p["stream_Source"])
+                                device.updateStateOnServer(key="still_Image_URL", value=p["still_Image_URL"])
                         if topic_parts[4] == "motion" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
                             if payload == "ON":
                                 device.updateStateOnServer(key="onOffState", value=True)
@@ -114,6 +110,16 @@ class Plugin(indigo.PluginBase):
                             device.updateStateOnServer(key="lastMotionTime", value=p["lastMotionTime"])
                             device.updateStateOnServer(key="personDetected", value=p["personDetected"])
                             device.updateStateOnServer(key="motionDetectionEnabled", value=p["motionDetectionEnabled"])
+
+                        if topic_parts[4] == "ding" and topic_parts[5] == "state" and device.deviceTypeId == "RingDoorbell":
+                            if payload == "ON":
+                                device.updateStateOnServer(key="onOffState", value=True)
+                            else:
+                                device.updateStateOnServer(key="onOffState", value=False)
+
+                        if topic_parts[4] == "ding" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingDoorbell":
+                            p = json.loads(payload)
+                            device.updateStateOnServer(key="lastDingTime", value=p["lastDingTime"])
 
                         if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
                             if payload == "ON":
@@ -128,41 +134,51 @@ class Plugin(indigo.PluginBase):
                             device.updateStateOnServer(key="batteryLevel", value=p["batteryLife"])
 
                     if topic_parts[2] == "lighting":
+                        if topic_parts[4] == "status":
+                            device.updateStateOnServer(key="status", value=payload)
+                        if topic_parts[4] == "info":
+                            p = json.loads(payload)
+                            device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
                         if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
                             if payload == "ON":
                                 device.updateStateOnServer(key="onOffState", value=True)
                             else:
                                 device.updateStateOnServer(key="onOffState", value=False)
+                        if topic_parts[4] == "light" and topic_parts[5] == "brightness_state" and device.deviceTypeId == "RingLight":
+                            device.updateStateOnServer(key="brightness_state", value=payload)
+                        if topic_parts[4] == "beam_duration" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
+                            device.updateStateOnServer(key="beam_duration", value=payload)
+
 
             if topic_parts[0] == "homeassistant":
                 if topic_parts[1] == "binary_sensor":
                     if "_motion" in topic_parts[3]:
                         p = json.loads(payload)
                         q = p["device"]
-                        self.ring_motion_devices[q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0]]
+                        self.ring_devices[topic_parts[2] + "-M-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingMotion"]
                         continue
                     if "_ding" in topic_parts[3]:
                         p = json.loads(payload)
                         q = p["device"]
-                        self.ring_doorbells[q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0]]
+                        self.ring_devices[topic_parts[2] + "-D-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingDoorbell"]
                         continue
                 if topic_parts[1] == "sensor":
                     if "_battery" in topic_parts[3]:
                         p = json.loads(payload)
                         q = p["device"]
-                        self.ring_battery_devices[q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0]]
+                        self.ring_battery_devices[topic_parts[2] + "-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "Battery"]
                         continue
                 if topic_parts[1] == "camera":
                     if "_snapshot" in topic_parts[3]:
                         p = json.loads(payload)
                         q = p["device"]
-                        self.ring_cameras[q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0]]
+                        self.ring_devices[topic_parts[2] + "-C-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingCamera"]
                         continue
                 if topic_parts[1] == "light":
                     if "_light" in topic_parts[3]:
                         p = json.loads(payload)
                         q = p["device"]
-                        self.ring_light_devices[q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0]]
+                        self.ring_devices[topic_parts[2] + "-L-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingLight"]
                         continue
     @staticmethod
     def get_mqtt_connectors(filter="", valuesDict=None, typeId="", targetId=0):
@@ -176,48 +192,33 @@ class Plugin(indigo.PluginBase):
 
     def get_ring_devices(self, filter="", valuesDict=None, typeId="", targetId=0):
         retList = []
-        tDict = {}
-        if typeId == "RingMotion":
-            tDict = self.ring_motion_devices
-        if typeId == "RingLight":
-            tDict = self.ring_light_devices
-        if typeId == "RingCamera":
-            tDict = self.ring_cameras
-        if typeId == "RingDoorbell":
-            tDict = self.ring_doorbells
-        for aID in tDict:
-            retList.append((aID, tDict[aID][0]))
+        for aID in self.ring_devices:
+            if self.ring_devices[aID][5] == typeId:
+                retList.append((aID, self.ring_devices[aID][0]))
         retList.sort(key=lambda tup: tup[1])
         return retList
-    def get_ring_cameras(self):
-        self.ring_cameras = {}
-        self.ring_cameras["3045115dc3f1"] = [0, "Front Door", "Ring", "Doorbell 2", "3045115dc3f1"]
-        self.ring_cameras["60b6e1b5eb26"] = [1, "Side", "Ring", "Spotlight Cam", "60b6e1b5eb26"]
-        self.ring_cameras["0cae7dc23ab7"] = [2, "Backyard", "Ring", "Floodlight Cam", "0cae7dc23ab7"]
-        return
+
     def selectionChanged(self, valuesDict, typeId, devId):
         self.logger.debug("SelectionChanged")
-        tDict = {}
-        if typeId == "RingMotion":
-            tDict = self.ring_motion_devices
-        if typeId == "RingLight":
-            tDict = self.ring_light_devices
-            self.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
-        if typeId == "RingCamera":
-            tDict = self.ring_cameras
-        if typeId == "RingDoorbell":
-            tDict = self.ring_doorbells
         self.logger.debug("Looking up deviceID %s in DeviceList Table" % valuesDict["doorbell"])
         #selectedData = self.ring_cameras[int(valuesDict["doorbell"])]
-        if valuesDict["doorbell"] in tDict:
-            valuesDict["doorbellId"] = tDict[valuesDict["doorbell"]][3]
-            valuesDict["address"] = tDict[valuesDict["doorbell"]][3]
-            valuesDict["name"] = tDict[valuesDict["doorbell"]][0]
-            valuesDict["manufacturer"] = tDict[valuesDict["doorbell"]][1]
-            valuesDict["model"] = tDict[valuesDict["doorbell"]][2]
+        if valuesDict["doorbell"] in self.ring_devices:
+            valuesDict["doorbellId"] = valuesDict["doorbell"]
+            valuesDict["address"] = valuesDict["doorbell"]
+            valuesDict["name"] = self.ring_devices[valuesDict["doorbell"]][0]
+            valuesDict["manufacturer"] = self.ring_devices[valuesDict["doorbell"]][1]
+            valuesDict["model"] = self.ring_devices[valuesDict["doorbell"]][2]
 
         # self.debugLog(u"\tSelectionChanged valuesDict to be returned:\n%s" % (str(valuesDict)))
         return valuesDict
+
+    def force_ha_messages(self, valuesDict, typeId):
+
+        brokerID = int(valuesDict['brokerID'])
+        self.publish_topic(brokerID,"HA_Message_Refresh", f"haas/status","online")
+        self.logger.info(f"Sent Haas/Status - online - devices should be updated shortly")
+
+        return True
 
     def create_trigger(self, valuesDict, typeId):
 
@@ -264,31 +265,34 @@ class Plugin(indigo.PluginBase):
 
     def actionControlDevice(self, action, device):
 
+        brokerID = int(device.pluginProps['brokerID'])
+
         if action.deviceAction == indigo.kDeviceAction.TurnOff:
             self.logger.debug(f"actionControlDevice: Light Off {device.name}")
             tLightType = "lighting"
-            if device.address in self.ring_cameras:
+            tCamCheck = self.ring_devices[device.address][4] + "-C-" + self.ring_devices[device.address][3]
+            if self.ring_devices[tCamCheck][5] == "RingCamera":
                     tLightType = "camera"
-            self.publish_topic(device, f"ring/{self.ring_locations}/{tLightType}/{device.address}/light/command", "OFF")
+            self.publish_topic(brokerID, device.name, f"ring/{self.ring_devices[device.address][4]}/{tLightType}/{self.ring_devices[device.address][3]}/light/command", "OFF")
 
         elif action.deviceAction == indigo.kDeviceAction.TurnOn:
             self.logger.debug(f"actionControlDevice: Light On {device.name}")
             tLightType = "lighting"
-            if device.address in self.ring_cameras:
+            tCamCheck = self.ring_devices[device.address][4] + "-C-" + self.ring_devices[device.address][3]
+            if self.ring_devices[tCamCheck][5] == "RingCamera":
                 tLightType = "camera"
-            self.publish_topic(device, f"ring/{self.ring_locations}/{tLightType}/{device.address}/light/command", "ON")
+            self.publish_topic(brokerID, device.name, f"ring/{self.ring_devices[device.address][4]}/{tLightType}/{self.ring_devices[device.address][3]}/light/command", "ON")
 
         else:
             self.logger.error(f"{device.name}: actionControlDevice: Unsupported action requested: {action.deviceAction}")
 
-    def publish_topic(self, device, topic, payload):
+    def publish_topic(self, brokerID, devicename, topic, payload):
 
         mqttPlugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.mqtt")
         if not mqttPlugin.isEnabled():
             self.logger.error("MQTT Connector plugin not enabled, publish_topic aborting.")
             return
 
-        brokerID = int(device.pluginProps['brokerID'])
         props = {
             'topic': topic,
             'payload': payload,
@@ -296,7 +300,7 @@ class Plugin(indigo.PluginBase):
             'retain': 0,
         }
         mqttPlugin.executeAction("publish", deviceId=brokerID, props=props, waitUntilDone=False)
-        self.logger.debug(f"{device.name}: publish_topic: {topic} -> {payload}")
+        self.logger.debug(f"{devicename}: publish_topic: {topic} -> {payload}")
 
     ########################################
     ########################################

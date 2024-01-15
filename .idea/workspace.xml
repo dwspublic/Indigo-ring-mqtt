@@ -5,7 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="075b0740-1561-4e6d-8287-358c518f3641" name="Changes" comment=".1">
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ring-mqtt.indigoPlugin/Contents/Server Plugin/Devices.xml" beforeDir="false" afterPath="$PROJECT_DIR$/ring-mqtt.indigoPlugin/Contents/Server Plugin/Devices.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ring-mqtt.indigoPlugin/Contents/Server Plugin/MenuItems.xml" beforeDir="false" afterPath="$PROJECT_DIR$/ring-mqtt.indigoPlugin/Contents/Server Plugin/MenuItems.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ring-mqtt.indigoPlugin/Contents/Server Plugin/PluginConfig.xml" beforeDir="false" afterPath="$PROJECT_DIR$/ring-mqtt.indigoPlugin/Contents/Server Plugin/PluginConfig.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ring-mqtt.indigoPlugin/Contents/Server Plugin/plugin.py" beforeDir="false" afterPath="$PROJECT_DIR$/ring-mqtt.indigoPlugin/Contents/Server Plugin/plugin.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -78,7 +82,8 @@
       <workItem from="1704926746508" duration="10896000" />
       <workItem from="1705167362224" duration="31000" />
       <workItem from="1705168764714" duration="17929000" />
-      <workItem from="1705196487517" duration="3621000" />
+      <workItem from="1705196487517" duration="3801000" />
+      <workItem from="1705256273641" duration="15077000" />
     </task>
     <task id="LOCAL-00001" summary=".1">
       <option name="closed" value="true" />
@@ -96,7 +101,15 @@
       <option name="project" value="LOCAL" />
       <updated>1705201447845</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary=".1">
+      <option name="closed" value="true" />
+      <created>1705202823398</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1705202823398</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -105,13 +118,5 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value=".1" />
     <option name="LAST_COMMIT_MESSAGE" value=".1" />
-  </component>
-  <component name="XDebuggerManager">
-    <watches-manager>
-      <configuration name="PyRemoteDebugConfigurationType">
-        <watch expression="self.ring_cameras" language="Python" />
-        <watch expression="self.plugin_prefs" language="Python" />
-      </configuration>
-    </watches-manager>
   </component>
 </project>

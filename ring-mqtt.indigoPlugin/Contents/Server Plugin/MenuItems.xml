@@ -9,4 +9,14 @@
             </Field>
         </ConfigUI>
 	</MenuItem>
+    <MenuItem id="ha_messages">
+		<Name>Force HA Message Creation</Name>
+		<CallbackMethod>force_ha_messages</CallbackMethod>
+        <ConfigUI>
+            <Field id="brokerID" type="menu">
+                <Label>MQTT Broker:</Label>
+                <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
+            </Field>
+        </ConfigUI>
+	</MenuItem>
 </MenuItems>
