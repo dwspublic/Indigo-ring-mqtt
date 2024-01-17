@@ -96,106 +96,119 @@ class Plugin(indigo.PluginBase):
                         continue
 
                     if topic_parts[2] == "camera":
-                        if topic_parts[4] == "status":
-                            device.updateStateOnServer(key="status", value=payload)
-                        if topic_parts[4] == "info":
-                            p = json.loads(payload)
-                            device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
-                            if device.deviceTypeId == "RingCamera":
-                                device.updateStateOnServer(key="stream_Source", value=p["stream_Source"])
-                                device.updateStateOnServer(key="still_Image_URL", value=p["still_Image_URL"])
-                        if topic_parts[4] == "motion" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
-                            if payload == "ON":
-                                device.updateStateOnServer(key="onOffState", value=True)
-                            else:
-                                device.updateStateOnServer(key="onOffState", value=False)
-
-                        if topic_parts[4] == "motion" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingMotion":
-                            p = json.loads(payload)
-                            device.updateStateOnServer(key="lastMotionTime", value=p["lastMotionTime"])
-                            device.updateStateOnServer(key="personDetected", value=p["personDetected"])
-                            device.updateStateOnServer(key="motionDetectionEnabled", value=p["motionDetectionEnabled"])
-
-                        if topic_parts[4] == "ding" and topic_parts[5] == "state" and device.deviceTypeId == "RingDoorbell":
-                            if payload == "ON":
-                                device.updateStateOnServer(key="onOffState", value=True)
-                            else:
-                                device.updateStateOnServer(key="onOffState", value=False)
-
-                        if topic_parts[4] == "ding" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingDoorbell":
-                            p = json.loads(payload)
-                            device.updateStateOnServer(key="lastDingTime", value=p["lastDingTime"])
-
-                        if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
-                            if payload == "ON":
-                                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
-                                device.updateStateOnServer(key="onOffState", value=True)
-                            else:
-                                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
-                                device.updateStateOnServer(key="onOffState", value=False)
-
-                        if topic_parts[4] == "battery" and topic_parts[5] == "attributes":
-                            p = json.loads(payload)
-                            if "batteryLife2" in p:
-                                if int(p["batteryLife2"]) > int(p["batteryLife"]) and self.pluginPrefs["batterystateUI"]:
-                                    b1 = p["batteryLife2"]
-                                    b2 = p["batteryLife"]
-                                else:
-                                    b1 = p["batteryLife"]
-                                    b2 = p["batteryLife2"]
-                            else:
-                                b1 = p["batteryLife"]
-                                b2 = "N/A"
-                            device.updateStateOnServer(key="batteryLevel", value=b1)
-                            device.updateStateOnServer(key="batteryLevel2", value=b2)
+                        self.processCMessage(device, topic_parts, payload)
+                        self.processBMessage(device, topic_parts, payload)
 
                     if topic_parts[2] == "lighting":
-                        if topic_parts[4] == "status":
-                            device.updateStateOnServer(key="status", value=payload)
-                        if topic_parts[4] == "info":
-                            p = json.loads(payload)
-                            device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
-                        if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
-                            if payload == "ON":
-                                device.updateStateOnServer(key="onOffState", value=True)
-                            else:
-                                device.updateStateOnServer(key="onOffState", value=False)
-                        if topic_parts[4] == "light" and topic_parts[5] == "brightness_state" and device.deviceTypeId == "RingLight":
-                            device.updateStateOnServer(key="brightness_state", value=payload)
-                        if topic_parts[4] == "beam_duration" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
-                            device.updateStateOnServer(key="beam_duration", value=payload)
+                        self.processLMessage(device, topic_parts, payload)
+                        self.processBMessage(device, topic_parts, payload)
 
-            if topic_parts[0] == "homeassistant":
-                if topic_parts[1] == "binary_sensor":
-                    if "_motion" in topic_parts[3]:
-                        p = json.loads(payload)
-                        q = p["device"]
-                        self.ring_devices[topic_parts[2] + "-M-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingMotion"]
-                        continue
-                    if "_ding" in topic_parts[3]:
-                        p = json.loads(payload)
-                        q = p["device"]
-                        self.ring_devices[topic_parts[2] + "-D-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingDoorbell"]
-                        continue
-                if topic_parts[1] == "sensor":
-                    if "_battery" in topic_parts[3]:
-                        p = json.loads(payload)
-                        q = p["device"]
-                        self.ring_battery_devices[topic_parts[2] + "-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "Battery"]
-                        continue
-                if topic_parts[1] == "camera":
-                    if "_snapshot" in topic_parts[3]:
-                        p = json.loads(payload)
-                        q = p["device"]
-                        self.ring_devices[topic_parts[2] + "-C-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingCamera"]
-                        continue
-                if topic_parts[1] == "light":
-                    if "_light" in topic_parts[3]:
-                        p = json.loads(payload)
-                        q = p["device"]
-                        self.ring_devices[topic_parts[2] + "-L-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingLight"]
-                        continue
+            elif topic_parts[0] == "homeassistant":
+                self.processHAMessage(topic_parts, payload)
 
+    def processHAMessage(self, topic_parts, payload):
+
+        if topic_parts[1] == "binary_sensor":
+            if "_motion" in topic_parts[3]:
+                p = json.loads(payload)
+                q = p["device"]
+                self.ring_devices[topic_parts[2] + "-M-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingMotion"]
+                return
+            if "_ding" in topic_parts[3]:
+                p = json.loads(payload)
+                q = p["device"]
+                self.ring_devices[topic_parts[2] + "-D-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingDoorbell"]
+                return
+        if topic_parts[1] == "sensor":
+            if "_battery" in topic_parts[3]:
+                p = json.loads(payload)
+                q = p["device"]
+                self.ring_battery_devices[topic_parts[2] + "-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "Battery"]
+                return
+        if topic_parts[1] == "camera":
+            if "_snapshot" in topic_parts[3]:
+                p = json.loads(payload)
+                q = p["device"]
+                self.ring_devices[topic_parts[2] + "-C-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingCamera"]
+                return
+        if topic_parts[1] == "light":
+            if "_light" in topic_parts[3]:
+                p = json.loads(payload)
+                q = p["device"]
+                self.ring_devices[topic_parts[2] + "-L-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingLight"]
+                return
+    def processCMessage(self, device, topic_parts, payload):
+
+        if topic_parts[4] == "status":
+            device.updateStateOnServer(key="status", value=payload)
+        if topic_parts[4] == "info":
+            p = json.loads(payload)
+            device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
+            if device.deviceTypeId == "RingCamera":
+                device.updateStateOnServer(key="stream_Source", value=p["stream_Source"])
+                device.updateStateOnServer(key="still_Image_URL", value=p["still_Image_URL"])
+        if topic_parts[4] == "motion" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
+            if payload == "ON":
+                device.updateStateOnServer(key="onOffState", value=True)
+            else:
+                device.updateStateOnServer(key="onOffState", value=False)
+
+        if topic_parts[4] == "motion" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingMotion":
+            p = json.loads(payload)
+            device.updateStateOnServer(key="lastMotionTime", value=p["lastMotionTime"])
+            device.updateStateOnServer(key="personDetected", value=p["personDetected"])
+            device.updateStateOnServer(key="motionDetectionEnabled", value=p["motionDetectionEnabled"])
+
+        if topic_parts[4] == "ding" and topic_parts[5] == "state" and device.deviceTypeId == "RingDoorbell":
+            if payload == "ON":
+                device.updateStateOnServer(key="onOffState", value=True)
+            else:
+                device.updateStateOnServer(key="onOffState", value=False)
+
+        if topic_parts[4] == "ding" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingDoorbell":
+            p = json.loads(payload)
+            device.updateStateOnServer(key="lastDingTime", value=p["lastDingTime"])
+
+        if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
+            if payload == "ON":
+                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
+                device.updateStateOnServer(key="onOffState", value=True)
+            else:
+                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+                device.updateStateOnServer(key="onOffState", value=False)
+
+    def processBMessage(self, device, topic_parts, payload):
+
+        if topic_parts[4] == "battery" and topic_parts[5] == "attributes":
+            p = json.loads(payload)
+            if "batteryLife2" in p:
+                if int(p["batteryLife2"]) > int(p["batteryLife"]) and self.pluginPrefs["batterystateUI"]:
+                    b1 = p["batteryLife2"]
+                    b2 = p["batteryLife"]
+                else:
+                    b1 = p["batteryLife"]
+                    b2 = p["batteryLife2"]
+            else:
+                b1 = p["batteryLife"]
+                b2 = "N/A"
+            device.updateStateOnServer(key="batteryLevel", value=b1)
+            device.updateStateOnServer(key="batteryLevel2", value=b2)
+
+    def processLMessage(self, device, topic_parts, payload):
+        if topic_parts[4] == "status":
+            device.updateStateOnServer(key="status", value=payload)
+        if topic_parts[4] == "info":
+            p = json.loads(payload)
+            device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
+        if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
+            if payload == "ON":
+                device.updateStateOnServer(key="onOffState", value=True)
+            else:
+                device.updateStateOnServer(key="onOffState", value=False)
+        if topic_parts[4] == "light" and topic_parts[5] == "brightness_state" and device.deviceTypeId == "RingLight":
+            device.updateStateOnServer(key="brightness_state", value=payload)
+        if topic_parts[4] == "beam_duration" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
+            device.updateStateOnServer(key="beam_duration", value=payload)
     @staticmethod
     def get_mqtt_connectors(filter="", valuesDict=None, typeId="", targetId=0):
         retList = []
