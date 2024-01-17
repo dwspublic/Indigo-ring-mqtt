@@ -1,6 +1,6 @@
 <MenuItems>
     <MenuItem id="create_trigger">
-		<Name>Create ringmqtt Trigger</Name>
+		<Name>Create ringmqtt Triggers</Name>
 		<CallbackMethod>create_trigger</CallbackMethod>
         <ConfigUI>
             <Field id="brokerID" type="menu">
@@ -10,7 +10,7 @@
         </ConfigUI>
 	</MenuItem>
     <MenuItem id="ha_messages">
-		<Name>Force HA Message Creation</Name>
+		<Name>Clear and reload Device Cache</Name>
 		<CallbackMethod>force_ha_messages</CallbackMethod>
         <ConfigUI>
             <Field id="brokerID" type="menu">

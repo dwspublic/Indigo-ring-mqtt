@@ -26,6 +26,7 @@ class Plugin(indigo.PluginBase):
         self.logLevel = int(self.pluginPrefs.get("logLevel", logging.INFO))
         self.indigo_log_handler.setLevel(self.logLevel)
         self.logger.debug(f"logLevel = {self.logLevel}")
+        self.brokerID = self.pluginPrefs["brokerID"]
 
         self.ringmqtt_devices = []
         self.ring_devices = {}
@@ -33,8 +34,11 @@ class Plugin(indigo.PluginBase):
 
         if "ring_devices" not in self.pluginPrefs:
             self.pluginPrefs["ring_devices"] = str(self.ring_devices)
+        if "ring_battery_devices" not in self.pluginPrefs:
+            self.pluginPrefs["ring_battery_devices"] = str(self.ring_battery_devices)
 
         self.ring_devices = eval(self.pluginPrefs["ring_devices"])
+        self.ring_battery_devices = eval(self.pluginPrefs["ring_battery_devices"])
 
         self.mqttPlugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.mqtt")
         if not self.mqttPlugin.isEnabled():
@@ -51,9 +55,9 @@ class Plugin(indigo.PluginBase):
     def shutdown(self):
         self.logger.info("Stopping ringmqtt")
         self.pluginPrefs["ring_devices"] = str(self.ring_devices)
-
+        self.pluginPrefs["ring_battery_devices"] = str(self.ring_battery_devices)
     def message_handler(self, notification):
-        self.logger.debug(f"message_handler: MQTT message {notification['message_type']} from {indigo.devices[int(notification['brokerID'])].name}")
+        self.logger.debug(f"message_handler: MQTT message {notification['message_type']} from {indigo.devices[int(self.brokerID)].name}")
         self.processMessage(notification)
 
     def deviceStartComm(self, device):
@@ -132,7 +136,18 @@ class Plugin(indigo.PluginBase):
 
                         if topic_parts[4] == "battery" and topic_parts[5] == "attributes":
                             p = json.loads(payload)
-                            device.updateStateOnServer(key="batteryLevel", value=p["batteryLife"])
+                            if "batteryLife2" in p:
+                                if int(p["batteryLife2"]) > int(p["batteryLife"]) and self.pluginPrefs["batterystateUI"]:
+                                    b1 = p["batteryLife2"]
+                                    b2 = p["batteryLife"]
+                                else:
+                                    b1 = p["batteryLife"]
+                                    b2 = p["batteryLife2"]
+                            else:
+                                b1 = p["batteryLife"]
+                                b2 = "N/A"
+                            device.updateStateOnServer(key="batteryLevel", value=b1)
+                            device.updateStateOnServer(key="batteryLevel2", value=b2)
 
                     if topic_parts[2] == "lighting":
                         if topic_parts[4] == "status":
@@ -195,7 +210,7 @@ class Plugin(indigo.PluginBase):
         retList = []
         for aID in self.ring_devices:
             if self.ring_devices[aID][5] == typeId:
-                retList.append((aID, self.ring_devices[aID][0]))
+                retList.append((aID, self.ring_devices[aID][0] + " (" + self.ring_devices[aID][1] + " - " + self.ring_devices[aID][2] + ")"))
         retList.sort(key=lambda tup: tup[1])
         return retList
 
@@ -209,13 +224,20 @@ class Plugin(indigo.PluginBase):
             valuesDict["name"] = self.ring_devices[valuesDict["doorbell"]][0]
             valuesDict["manufacturer"] = self.ring_devices[valuesDict["doorbell"]][1]
             valuesDict["model"] = self.ring_devices[valuesDict["doorbell"]][2]
+            p = self.ring_devices[valuesDict["doorbellId"]][4] + "-" + self.ring_devices[valuesDict["doorbellId"]][3]
+            if p in self.ring_battery_devices:
+                valuesDict["SupportsBatteryLevel"] = True
+            else:
+                valuesDict["SupportsBatteryLevel"] = False
 
         #self.logger.debug(u"\tSelectionChanged valuesDict to be returned:\n%s" % (str(valuesDict)))
         return valuesDict
 
     def force_ha_messages(self, valuesDict, typeId):
 
-        brokerID = int(valuesDict['brokerID'])
+        self.ring_devices = {}
+        self.ring_battery_devices = {}
+        brokerID = int(self.brokerID)
         self.publish_topic(brokerID, "HA_Message_Refresh", f"hass/status", "online")
         self.logger.info(f"Sent Haas/Status - online - devices should be updated shortly")
 
@@ -258,6 +280,20 @@ class Plugin(indigo.PluginBase):
             else:
                 self.logger.info(f"Created trigger '{name} for message type '{RINGMQTT_MESSAGE_TYPE}'")
 
+            name = f"ringmqtt-HA Trigger ({broker.name})"
+            try:
+                indigo.pluginEvent.create(name=name, pluginId="com.flyingdiver.indigoplugin.mqtt", pluginTypeId="topicMatch",
+                    props={
+                        "brokerID": valuesDict['brokerID'],
+                        "message_type": RINGMQTT_MESSAGE_TYPE,
+                        "queueMessage": "True",
+                        "match_list": ["Match: homeassistant", "Any: "]
+                    })
+            except Exception as e:
+                self.logger.error(f"Error calling indigo.pluginEvent.create(): {e}")
+            else:
+                self.logger.info(f"Created trigger '{name} for message type '{RINGMQTT_MESSAGE_TYPE}'")
+
         return True
 
     ########################################
@@ -266,7 +302,7 @@ class Plugin(indigo.PluginBase):
 
     def actionControlDevice(self, action, device):
 
-        brokerID = int(device.pluginProps['brokerID'])
+        brokerID = int(self.brokerID)
 
         if action.deviceAction == indigo.kDeviceAction.TurnOff:
             self.logger.debug(f"actionControlDevice: Light Off {device.name}")

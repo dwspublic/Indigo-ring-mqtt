@@ -11,10 +11,6 @@
  			<Field id="address" type="textfield"  hidden="true" >
 				<Label/>
 			</Field>
-			<Field id="brokerID" type="menu">
-                <Label>MQTT Broker:</Label>
-                <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
-            </Field>
 			<Field id="doorbell" type="menu">
 				<Label>Ring Motion:</Label>
 				<List class="self" filter="" method="get_ring_devices" dynamicReload="true"/>
@@ -69,6 +65,11 @@
 				<TriggerLabel>batteryLevel</TriggerLabel>
 				<ControlPageLabel>batteryLevel</ControlPageLabel>
 			</State>
+			<State id="batteryLevel2">
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel2</TriggerLabel>
+				<ControlPageLabel>batteryLevel2</ControlPageLabel>
+			</State>
 		</States>
 	</Device>
 	<Device type="relay" subType="" id="RingLight">
@@ -81,10 +82,6 @@
  			<Field id="address" type="textfield"  hidden="true" >
 				<Label/>
 			</Field>
-			<Field id="brokerID" type="menu">
-                <Label>MQTT Broker:</Label>
-                <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
-            </Field>
 			<Field id="doorbell" type="menu">
 				<Label>Ring Light:</Label>
 				<List class="self" filter="" method="get_ring_devices" dynamicReload="true"/>
@@ -129,6 +126,11 @@
 				<TriggerLabel>batteryLevel</TriggerLabel>
 				<ControlPageLabel>batteryLevel</ControlPageLabel>
 			</State>
+			<State id="batteryLevel2">
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel2</TriggerLabel>
+				<ControlPageLabel>batteryLevel2</ControlPageLabel>
+			</State>
 		</States>
 	</Device>
 	<Device type="custom" subType="kDeviceSubType.Camera" id="RingCamera">
@@ -141,10 +143,6 @@
  			<Field id="address" type="textfield"  hidden="true" >
 				<Label/>
 			</Field>
-			<Field id="brokerID" type="menu">
-                <Label>MQTT Broker:</Label>
-                <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
-            </Field>
 			<Field id="doorbell" type="menu">
 				<Label>Ring Camera:</Label>
 				<List class="self" filter="" method="get_ring_devices" dynamicReload="true"/>
@@ -189,6 +187,11 @@
 				<TriggerLabel>batteryLevel</TriggerLabel>
 				<ControlPageLabel>batteryLevel</ControlPageLabel>
 			</State>
+			<State id="batteryLevel2">
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel2</TriggerLabel>
+				<ControlPageLabel>batteryLevel2</ControlPageLabel>
+			</State>
 		</States>
 	</Device>
 	<Device type="relay" subType="kRelayDeviceSubType.Doorbell" id="RingDoorbell">
@@ -201,10 +204,6 @@
  			<Field id="address" type="textfield"  hidden="true" >
 				<Label/>
 			</Field>
-			<Field id="brokerID" type="menu">
-                <Label>MQTT Broker:</Label>
-                <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
-            </Field>
 			<Field id="doorbell" type="menu">
 				<Label>Ring Doorbell:</Label>
 				<List class="self" filter="" method="get_ring_devices" dynamicReload="true"/>
@@ -248,6 +247,11 @@
 				<ValueType>String</ValueType>
 				<TriggerLabel>batteryLevel</TriggerLabel>
 				<ControlPageLabel>batteryLevel</ControlPageLabel>
+			</State>
+			<State id="batteryLevel2">
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel2</TriggerLabel>
+				<ControlPageLabel>batteryLevel2</ControlPageLabel>
 			</State>
 		</States>
 	</Device>

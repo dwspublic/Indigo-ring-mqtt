@@ -3,6 +3,7 @@
     <SupportURL>http://forums.indigodomo.com/</SupportURL>
     <Field id="version" type="textfield" defaultValue="" hidden="True"/>
     <Field id="ring_devices" type="textfield" defaultValue="{}" hidden="True"/>
+    <Field id="ring_battery_devices" type="textfield" defaultValue="{}" hidden="True"/>
     <Field id="logLevel" type="menu" defaultValue="20">
         <Label>Event Logging Level:</Label>
         <List>
@@ -14,4 +15,11 @@
             <Option value="50">Critical Errors Only</Option>
         </List>
     </Field>       
+    <Field id="brokerID" type="menu">
+        <Label>MQTT Broker:</Label>
+        <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
+    </Field>
+    <Field id="batterystateUI" type="checkbox" defaultValue="false">
+        <Label>Display higher battery percentage</Label>
+    </Field>
 </PluginConfig>
