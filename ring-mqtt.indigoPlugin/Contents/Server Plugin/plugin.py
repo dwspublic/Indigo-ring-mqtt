@@ -288,6 +288,11 @@ class Plugin(indigo.PluginBase):
                 valuesDict["SupportsBatteryLevel"] = True
             else:
                 valuesDict["SupportsBatteryLevel"] = False
+            if typeId == "RingLight":
+                devId.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+            else:
+                devId.updateStateImageOnServer(indigo.kStateImageSel.Auto)
+
 
         #self.logger.debug(u"\tSelectionChanged valuesDict to be returned:\n%s" % (str(valuesDict)))
         return valuesDict
