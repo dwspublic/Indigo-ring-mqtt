@@ -364,20 +364,34 @@ class Plugin(indigo.PluginBase):
         brokerID = int(self.brokerID)
 
         if action.deviceAction == indigo.kDeviceAction.TurnOff:
-            self.logger.debug(f"actionControlDevice: Light Off {device.name}")
-            tLightType = "lighting"
-            tCamCheck = self.ring_devices[device.address][4] + "-C-" + self.ring_devices[device.address][3]
-            if tCamCheck in self.ring_devices:
-                tLightType = "camera"
-            self.publish_topic(brokerID, device.name, f"ring/{self.ring_devices[device.address][4]}/{tLightType}/{self.ring_devices[device.address][3]}/light/command", "OFF")
+            self.logger.debug(f"actionControlDevice: Turn Off {device.name}")
+            if device.deviceTypeId == "RingZChime":
+                topicType = "chime"
+                topicSubtype = "play_ding_sound"
+            else:
+                topicType = "lighting"
+                topicSubtype = "light"
+                tCamCheck = self.ring_devices[device.address][4] + "-C-" + self.ring_devices[device.address][3]
+                if tCamCheck in self.ring_devices:
+                    topicType = "camera"
+                    if device.deviceTypeId == "RingSiren":
+                        topicSubtype = "siren"
+            self.publish_topic(brokerID, device.name, f"ring/{self.ring_devices[device.address][4]}/{topicType}/{self.ring_devices[device.address][3]}/{topicSubtype}/command", "OFF")
 
         elif action.deviceAction == indigo.kDeviceAction.TurnOn:
-            self.logger.debug(f"actionControlDevice: Light On {device.name}")
-            tLightType = "lighting"
-            tCamCheck = self.ring_devices[device.address][4] + "-C-" + self.ring_devices[device.address][3]
-            if tCamCheck in self.ring_devices:
-                tLightType = "camera"
-            self.publish_topic(brokerID, device.name, f"ring/{self.ring_devices[device.address][4]}/{tLightType}/{self.ring_devices[device.address][3]}/light/command", "ON")
+            self.logger.debug(f"actionControlDevice: Turn On {device.name}")
+            if device.deviceTypeId == "RingZChime":
+                topicType = "chime"
+                topicSubtype = "play_ding_sound"
+            else:
+                topicType = "lighting"
+                topicSubtype = "light"
+                tCamCheck = self.ring_devices[device.address][4] + "-C-" + self.ring_devices[device.address][3]
+                if tCamCheck in self.ring_devices:
+                    topicType = "camera"
+                    if device.deviceTypeId == "RingSiren":
+                        topicSubtype = "siren"
+            self.publish_topic(brokerID, device.name, f"ring/{self.ring_devices[device.address][4]}/{topicType}/{self.ring_devices[device.address][3]}/{topicSubtype}/command", "ON")
 
         else:
             self.logger.error(f"{device.name}: actionControlDevice: Unsupported action requested: {action.deviceAction}")
