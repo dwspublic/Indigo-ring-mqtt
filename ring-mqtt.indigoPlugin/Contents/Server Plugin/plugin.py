@@ -103,6 +103,9 @@ class Plugin(indigo.PluginBase):
                         self.processLMessage(device, topic_parts, payload)
                         self.processBMessage(device, topic_parts, payload)
 
+                    if topic_parts[2] == "chime":
+                        self.processZMessage(device, topic_parts, payload)
+
             elif topic_parts[0] == "homeassistant":
                 self.processHAMessage(topic_parts, payload)
 
@@ -129,7 +132,18 @@ class Plugin(indigo.PluginBase):
             if "_snapshot" in topic_parts[3]:
                 p = json.loads(payload)
                 q = p["device"]
-                self.ring_devices[topic_parts[2] + "-C-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingCamera"]
+                self.ring_devices[topic_parts[2] + "-C-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0],topic_parts[2], "RingCamera"]
+                return
+        if topic_parts[1] == "switch":
+            if "_siren" in topic_parts[3]:
+                p = json.loads(payload)
+                q = p["device"]
+                self.ring_devices[topic_parts[2] + "-S-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingSiren"]
+                return
+            if "_snooze" in topic_parts[3]:
+                p = json.loads(payload)
+                q = p["device"]
+                self.ring_devices[topic_parts[2] + "-Z-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingZChime"]
                 return
         if topic_parts[1] == "light":
             if "_light" in topic_parts[3]:
@@ -177,6 +191,12 @@ class Plugin(indigo.PluginBase):
                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
                 device.updateStateOnServer(key="onOffState", value=False)
 
+        if topic_parts[4] == "siren" and topic_parts[5] == "state" and device.deviceTypeId == "RingSiren":
+            if payload == "ON":
+                device.updateStateOnServer(key="onOffState", value=True)
+            else:
+                device.updateStateOnServer(key="onOffState", value=False)
+
     def processBMessage(self, device, topic_parts, payload):
 
         if topic_parts[4] == "battery" and topic_parts[5] == "attributes":
@@ -195,6 +215,7 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="batteryLevel2", value=b2)
 
     def processLMessage(self, device, topic_parts, payload):
+
         if topic_parts[4] == "status":
             device.updateStateOnServer(key="status", value=payload)
         if topic_parts[4] == "info":
@@ -209,6 +230,31 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="brightness_state", value=payload)
         if topic_parts[4] == "beam_duration" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
             device.updateStateOnServer(key="beam_duration", value=payload)
+
+    def processZMessage(self, device, topic_parts, payload):
+
+        if topic_parts[4] == "status":
+            device.updateStateOnServer(key="status", value=payload)
+        if topic_parts[4] == "info":
+            p = json.loads(payload)
+            device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
+        if topic_parts[4] == "play_ding_sound" and topic_parts[5] == "state":
+            device.updateStateOnServer(key="play_ding_sound", value=payload)
+            if payload == "ON":
+                device.updateStateOnServer(key="onOffState", value=True)
+            else:
+                device.updateStateOnServer(key="onOffState", value=False)
+        if topic_parts[4] == "play_motion_sound" and topic_parts[5] == "state":
+            device.updateStateOnServer(key="play_motion_sound", value=payload)
+        if topic_parts[4] == "volume" and topic_parts[5] == "state":
+            device.updateStateOnServer(key="volume", value=payload)
+        if topic_parts[4] == "snooze" and topic_parts[5] == "state":
+            device.updateStateOnServer(key="snooze", value=payload)
+        if topic_parts[4] == "snooze" and topic_parts[5] == "attributes":
+            p = json.loads(payload)
+            device.updateStateOnServer(key="snooze_minutes_remaining", value=p["minutes_remaining"])
+        if topic_parts[4] == "snooze_minutes" and topic_parts[5] == "state":
+            device.updateStateOnServer(key="snooze_minutes", value=payload)
     @staticmethod
     def get_mqtt_connectors(filter="", valuesDict=None, typeId="", targetId=0):
         retList = []
@@ -321,7 +367,7 @@ class Plugin(indigo.PluginBase):
             self.logger.debug(f"actionControlDevice: Light Off {device.name}")
             tLightType = "lighting"
             tCamCheck = self.ring_devices[device.address][4] + "-C-" + self.ring_devices[device.address][3]
-            if self.ring_devices[tCamCheck][5] == "RingCamera":
+            if tCamCheck in self.ring_devices:
                 tLightType = "camera"
             self.publish_topic(brokerID, device.name, f"ring/{self.ring_devices[device.address][4]}/{tLightType}/{self.ring_devices[device.address][3]}/light/command", "OFF")
 
@@ -329,7 +375,7 @@ class Plugin(indigo.PluginBase):
             self.logger.debug(f"actionControlDevice: Light On {device.name}")
             tLightType = "lighting"
             tCamCheck = self.ring_devices[device.address][4] + "-C-" + self.ring_devices[device.address][3]
-            if self.ring_devices[tCamCheck][5] == "RingCamera":
+            if tCamCheck in self.ring_devices:
                 tLightType = "camera"
             self.publish_topic(brokerID, device.name, f"ring/{self.ring_devices[device.address][4]}/{tLightType}/{self.ring_devices[device.address][3]}/light/command", "ON")
 

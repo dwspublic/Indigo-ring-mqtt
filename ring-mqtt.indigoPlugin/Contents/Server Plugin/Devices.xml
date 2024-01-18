@@ -255,5 +255,137 @@
 			</State>
 		</States>
 	</Device>
+	<Device type="relay" subType="kRelayDeviceSubType.Doorbell" id="RingZChime">
+		<Name>Ring Chime</Name>
+		<ConfigUI>
+			<Field id="SupportsBatteryLevel" type="checkbox" defaultValue="true" hidden="true" />
+			<Field id="SupportsOnState" type="checkbox" defaultValue="true" hidden="true" />
+			<Field id="SupportsSensorValue" type="checkbox" defaultValue="false" hidden="true" />
+			<Field id="SupportsStatusRequest" type="checkbox" defaultValue="false" hidden="true" />
+ 			<Field id="address" type="textfield"  hidden="true" >
+				<Label/>
+			</Field>
+			<Field id="doorbell" type="menu">
+				<Label>Ring Chime:</Label>
+				<List class="self" filter="" method="get_ring_devices" dynamicReload="true"/>
+				<CallbackMethod>selectionChanged</CallbackMethod>
+			</Field>
+			<Field type="textfield" id="doorbellId" readonly="true">
+				<Label>Device ID:</Label>
+			</Field>
+			<Field type="textfield" id="name" readonly="true">
+				<Label>Ring App Name:</Label>
+			</Field>
+			<Field type="textfield" id="manufacturer" readonly="true">
+				<Label>Manufacturer:</Label>
+			</Field>
+			<Field type="textfield" id="model" readonly="true">
+				<Label>Model:</Label>
+			</Field>
+		</ConfigUI>
+		<States>
+			<State id="status">
+				<ValueType>String</ValueType>
+				<TriggerLabel>status</TriggerLabel>
+				<ControlPageLabel>status</ControlPageLabel>
+			</State>
+			<State id="volume">
+				<ValueType>String</ValueType>
+				<TriggerLabel>volume</TriggerLabel>
+				<ControlPageLabel>volume</ControlPageLabel>
+			</State>
+			<State id="snooze">
+				<ValueType>String</ValueType>
+				<TriggerLabel>snooze</TriggerLabel>
+				<ControlPageLabel>snooze</ControlPageLabel>
+			</State>
+			<State id="snooze_minutes">
+				<ValueType>String</ValueType>
+				<TriggerLabel>snooze_minutes</TriggerLabel>
+				<ControlPageLabel>snooze_minutes</ControlPageLabel>
+			</State>
+			<State id="snooze_minutes_remaining">
+				<ValueType>String</ValueType>
+				<TriggerLabel>snooze_minutes_remaining</TriggerLabel>
+				<ControlPageLabel>snooze_minutes_remaining</ControlPageLabel>
+			</State>
+			<State id="play_ding_sound">
+				<ValueType>String</ValueType>
+				<TriggerLabel>play_ding_sound</TriggerLabel>
+				<ControlPageLabel>play_ding_sound</ControlPageLabel>
+			</State>
+			<State id="play_motion_sound">
+				<ValueType>String</ValueType>
+				<TriggerLabel>play_motion_sound</TriggerLabel>
+				<ControlPageLabel>play_motion_sound</ControlPageLabel>
+			</State>
+			<State id="firmwareStatus">
+				<ValueType>String</ValueType>
+				<TriggerLabel>firmwareStatus</TriggerLabel>
+				<ControlPageLabel>firmwareStatus</ControlPageLabel>
+			</State>
+			<State id="batteryLevel">
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel</TriggerLabel>
+				<ControlPageLabel>batteryLevel</ControlPageLabel>
+			</State>
+			<State id="batteryLevel2">
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel2</TriggerLabel>
+				<ControlPageLabel>batteryLevel2</ControlPageLabel>
+			</State>
+		</States>
+	</Device>
+	<Device type="relay" subType="kRelayDeviceSubType.Doorbell" id="RingSiren">
+		<Name>Ring Siren</Name>
+		<ConfigUI>
+			<Field id="SupportsBatteryLevel" type="checkbox" defaultValue="true" hidden="true" />
+			<Field id="SupportsOnState" type="checkbox" defaultValue="true" hidden="true" />
+			<Field id="SupportsSensorValue" type="checkbox" defaultValue="false" hidden="true" />
+			<Field id="SupportsStatusRequest" type="checkbox" defaultValue="false" hidden="true" />
+ 			<Field id="address" type="textfield"  hidden="true" >
+				<Label/>
+			</Field>
+			<Field id="doorbell" type="menu">
+				<Label>Ring Siren:</Label>
+				<List class="self" filter="" method="get_ring_devices" dynamicReload="true"/>
+				<CallbackMethod>selectionChanged</CallbackMethod>
+			</Field>
+			<Field type="textfield" id="doorbellId" readonly="true">
+				<Label>Device ID:</Label>
+			</Field>
+			<Field type="textfield" id="name" readonly="true">
+				<Label>Ring App Name:</Label>
+			</Field>
+			<Field type="textfield" id="manufacturer" readonly="true">
+				<Label>Manufacturer:</Label>
+			</Field>
+			<Field type="textfield" id="model" readonly="true">
+				<Label>Model:</Label>
+			</Field>
+		</ConfigUI>
+		<States>
+			<State id="status">
+				<ValueType>String</ValueType>
+				<TriggerLabel>status</TriggerLabel>
+				<ControlPageLabel>status</ControlPageLabel>
+			</State>
+			<State id="firmwareStatus">
+				<ValueType>String</ValueType>
+				<TriggerLabel>firmwareStatus</TriggerLabel>
+				<ControlPageLabel>firmwareStatus</ControlPageLabel>
+			</State>
+			<State id="batteryLevel">
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel</TriggerLabel>
+				<ControlPageLabel>batteryLevel</ControlPageLabel>
+			</State>
+			<State id="batteryLevel2">
+				<ValueType>String</ValueType>
+				<TriggerLabel>batteryLevel2</TriggerLabel>
+				<ControlPageLabel>batteryLevel2</ControlPageLabel>
+			</State>
+		</States>
+	</Device>
 </Devices>
 
