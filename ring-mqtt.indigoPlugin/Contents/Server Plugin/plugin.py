@@ -172,7 +172,6 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
             if device.deviceTypeId == "RingCamera":
                 device.updateStateOnServer(key="stream_Source", value=p["stream_Source"])
-                device.updateStateOnServer(key="still_Image_URL", value=p["still_Image_URL"])
         if topic_parts[4] == "motion" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
             if payload == "ON":
                 device.updateStateOnServer(key="onOffState", value=True)
@@ -184,6 +183,19 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="lastMotionTime", value=p["lastMotionTime"])
             device.updateStateOnServer(key="personDetected", value=p["personDetected"])
             device.updateStateOnServer(key="motionDetectionEnabled", value=p["motionDetectionEnabled"])
+
+        if topic_parts[4] == "snapshot" and topic_parts[5] == "image" and device.deviceTypeId == "RingCamera":
+            device.updateStateOnServer(key="snapshot_image", value=payload)
+
+        if topic_parts[4] == "snapshot" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
+            p = json.loads(payload)
+            device.updateStateOnServer(key="snapshot_timestamp", value=p["timestamp"])
+            device.updateStateOnServer(key="snapshot_type", value=p["type"])
+
+        if topic_parts[4] == "event_select" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
+            p = json.loads(payload)
+            device.updateStateOnServer(key="event_recordingUrl1", value=p["recordingUrl"])
+            device.updateStateOnServer(key="event_eventId1", value=p["eventId"])
 
         if topic_parts[4] == "ding" and topic_parts[5] == "state" and device.deviceTypeId == "RingDoorbell":
             if payload == "ON":
