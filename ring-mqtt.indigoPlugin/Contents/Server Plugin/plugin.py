@@ -64,6 +64,10 @@ class Plugin(indigo.PluginBase):
         self.logger.info(f"{device.name}: Starting Device")
         if device.id not in self.ringmqtt_devices:
             self.ringmqtt_devices.append(device.id)
+        if device.deviceTypeId == "RingLight":
+            device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+        else:
+            device.updateStateImageOnServer(indigo.kStateImageSel.Auto)
 
     def deviceStopComm(self, device):
         self.logger.info(f"{device.name}: Stopping Device")
@@ -108,6 +112,14 @@ class Plugin(indigo.PluginBase):
 
             elif topic_parts[0] == "homeassistant":
                 self.processHAMessage(topic_parts, payload)
+
+    def deviceImageUpdate(self):
+        for device_id in self.ringmqtt_devices:
+            device = indigo.devices[device_id]
+            if device.deviceTypeId == "RingLight":
+                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+            else:
+                device.updateStateImageOnServer(indigo.kStateImageSel.Auto)
 
     def processHAMessage(self, topic_parts, payload):
 
@@ -223,8 +235,10 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
         if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
             if payload == "ON":
+                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
                 device.updateStateOnServer(key="onOffState", value=True)
             else:
+                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
                 device.updateStateOnServer(key="onOffState", value=False)
         if topic_parts[4] == "light" and topic_parts[5] == "brightness_state" and device.deviceTypeId == "RingLight":
             device.updateStateOnServer(key="brightness_state", value=payload)
@@ -288,15 +302,18 @@ class Plugin(indigo.PluginBase):
                 valuesDict["SupportsBatteryLevel"] = True
             else:
                 valuesDict["SupportsBatteryLevel"] = False
-            if typeId == "RingLight":
-                devId.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
-            else:
-                devId.updateStateImageOnServer(indigo.kStateImageSel.Auto)
-
 
         #self.logger.debug(u"\tSelectionChanged valuesDict to be returned:\n%s" % (str(valuesDict)))
         return valuesDict
 
+    def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
+        if not userCancelled:
+            device = indigo.devices[devId]
+            if typeId == "RingLight":
+                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+            else:
+                device.updateStateImageOnServer(indigo.kStateImageSel.Auto)
+        return
     def force_ha_messages(self, valuesDict, typeId):
 
         self.ring_devices = {}
@@ -426,6 +443,7 @@ class Plugin(indigo.PluginBase):
         if not userCancelled:
             self.logLevel = int(valuesDict.get("logLevel", logging.INFO))
             self.indigo_log_handler.setLevel(self.logLevel)
+
 
     ########################################
     # Custom Plugin Action callbacks (defined in Actions.xml)
