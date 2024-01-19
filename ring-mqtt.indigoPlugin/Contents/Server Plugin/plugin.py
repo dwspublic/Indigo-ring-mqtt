@@ -186,6 +186,9 @@ class Plugin(indigo.PluginBase):
 
         if topic_parts[4] == "snapshot" and topic_parts[5] == "image" and device.deviceTypeId == "RingCamera":
             device.updateStateOnServer(key="snapshot_image", value=payload)
+            test_file = open('/Users/darrylscott/Pictures/test_file.dat','ab')
+            test_file.write(payload)
+            test_file.close()
 
         if topic_parts[4] == "snapshot" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
             p = json.loads(payload)
