@@ -4,6 +4,7 @@
 
 import logging
 import json
+import datetime
 try:
     import indigo
 except ImportError:
@@ -51,6 +52,7 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         self.logger.info("Starting ringmqtt")
         indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
+        self.deviceRingCacheCheck()
 
     def shutdown(self):
         self.logger.info("Stopping ringmqtt")
@@ -121,7 +123,14 @@ class Plugin(indigo.PluginBase):
             else:
                 device.updateStateImageOnServer(indigo.kStateImageSel.Auto)
 
+    def deviceRingCacheCheck(self):
+        for device_id in self.ringmqtt_devices:
+            device = indigo.devices[device_id]
+            if device.address not in self.ring_devices:
+                self.logger.info(f"deviceRingCacheCheck - Device Name:{device.name} - Device Address{device.address}")
+
     def processHAMessage(self, topic_parts, payload):
+        self.logger.debug(f"processHAMessage: {topic_parts}:{payload}")
 
         if topic_parts[1] == "binary_sensor":
             if "_motion" in topic_parts[3]:
@@ -164,12 +173,14 @@ class Plugin(indigo.PluginBase):
                 self.ring_devices[topic_parts[2] + "-L-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingLight"]
                 return
     def processCMessage(self, device, topic_parts, payload):
+        self.logger.debug(f"processCMessage: {topic_parts}:{payload} - Device:{device.name}")
 
         if topic_parts[4] == "status":
             device.updateStateOnServer(key="status", value=payload)
         if topic_parts[4] == "info":
             p = json.loads(payload)
             device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
+            device.updateStateOnServer(key="lastUpdate", value=self.convertZeroDate(p["lastUpdate"]))
             if device.deviceTypeId == "RingCamera":
                 device.updateStateOnServer(key="stream_Source", value=p["stream_Source"])
         if topic_parts[4] == "motion" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
@@ -180,7 +191,7 @@ class Plugin(indigo.PluginBase):
 
         if topic_parts[4] == "motion" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingMotion":
             p = json.loads(payload)
-            device.updateStateOnServer(key="lastMotionTime", value=p["lastMotionTime"])
+            device.updateStateOnServer(key="lastMotionTime", value=self.convertZeroDate(p["lastMotionTime"]))
             device.updateStateOnServer(key="personDetected", value=p["personDetected"])
             device.updateStateOnServer(key="motionDetectionEnabled", value=p["motionDetectionEnabled"])
 
@@ -192,7 +203,7 @@ class Plugin(indigo.PluginBase):
 
         if topic_parts[4] == "snapshot" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
             p = json.loads(payload)
-            device.updateStateOnServer(key="snapshot_timestamp", value=p["timestamp"])
+            device.updateStateOnServer(key="snapshot_timestamp", value=str(datetime.datetime.fromtimestamp(p["timestamp"])))
             device.updateStateOnServer(key="snapshot_type", value=p["type"])
 
         if topic_parts[4] == "event_select" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
@@ -208,7 +219,7 @@ class Plugin(indigo.PluginBase):
 
         if topic_parts[4] == "ding" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingDoorbell":
             p = json.loads(payload)
-            device.updateStateOnServer(key="lastDingTime", value=p["lastDingTime"])
+            device.updateStateOnServer(key="lastDingTime", value=self.convertZeroDate(p["lastDingTime"]))
 
         if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
             if payload == "ON":
@@ -225,6 +236,7 @@ class Plugin(indigo.PluginBase):
                 device.updateStateOnServer(key="onOffState", value=False)
 
     def processBMessage(self, device, topic_parts, payload):
+        self.logger.debug(f"processBMessage: {topic_parts}:{payload}")
 
         if topic_parts[4] == "battery" and topic_parts[5] == "attributes":
             p = json.loads(payload)
@@ -242,12 +254,14 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="batteryLevel2", value=b2)
 
     def processLMessage(self, device, topic_parts, payload):
+        self.logger.debug(f"processLMessage: {topic_parts}:{payload} - Device:{device.name}")
 
         if topic_parts[4] == "status":
             device.updateStateOnServer(key="status", value=payload)
         if topic_parts[4] == "info":
             p = json.loads(payload)
             device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
+            device.updateStateOnServer(key="lastUpdate", value=self.convertZeroDate(p["lastUpdate"]))
         if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
             if payload == "ON":
                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
@@ -261,12 +275,14 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="beam_duration", value=payload)
 
     def processZMessage(self, device, topic_parts, payload):
+        self.logger.debug(f"processZMessage: {topic_parts}:{payload} - Device:{device.name}")
 
         if topic_parts[4] == "status":
             device.updateStateOnServer(key="status", value=payload)
         if topic_parts[4] == "info":
             p = json.loads(payload)
             device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
+            device.updateStateOnServer(key="lastUpdate", value=self.convertZeroDate(p["lastUpdate"]))
         if topic_parts[4] == "play_ding_sound" and topic_parts[5] == "state":
             device.updateStateOnServer(key="play_ding_sound", value=payload)
             if payload == "ON":
@@ -302,10 +318,16 @@ class Plugin(indigo.PluginBase):
         retList.sort(key=lambda tup: tup[1])
         return retList
 
+    def convertZeroDate(self, zeroDate=""):
+        d1 = datetime.datetime.fromisoformat(zeroDate.replace('Z', '+00:00'))
+        sgtTimeDelta = datetime.timedelta(hours=-5)
+        sgtTZObject = datetime.timezone(sgtTimeDelta, name="SGT")
+        d2 = str(d1.astimezone(sgtTZObject))
+        return d2
+
     def selectionChanged(self, valuesDict, typeId, devId):
         self.logger.debug("SelectionChanged")
-        self.logger.debug("Looking up deviceID %s in DeviceList Table" % valuesDict["doorbell"])
-        #selectedData = self.ring_cameras[int(valuesDict["doorbell"])]
+        self.logger.debug("Looking up deviceID %s in Device Cache" % valuesDict["doorbell"])
         if valuesDict["doorbell"] in self.ring_devices:
             valuesDict["doorbellId"] = valuesDict["doorbell"]
             valuesDict["address"] = valuesDict["doorbell"]
@@ -318,7 +340,7 @@ class Plugin(indigo.PluginBase):
             else:
                 valuesDict["SupportsBatteryLevel"] = False
 
-        #self.logger.debug(u"\tSelectionChanged valuesDict to be returned:\n%s" % (str(valuesDict)))
+        self.logger.debug(u"\tSelectionChanged valuesDict to be returned:\n%s" % (str(valuesDict)))
         return valuesDict
 
     def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
@@ -330,6 +352,7 @@ class Plugin(indigo.PluginBase):
                 device.updateStateImageOnServer(indigo.kStateImageSel.Auto)
         return
     def force_ha_messages(self, valuesDict, typeId):
+        self.logger.debug(f"Clear Device Cache and rebuild")
 
         self.ring_devices = {}
         self.ring_battery_devices = {}
@@ -388,7 +411,7 @@ class Plugin(indigo.PluginBase):
             except Exception as e:
                 self.logger.error(f"Error calling indigo.pluginEvent.create(): {e}")
             else:
-                self.logger.info(f"Created trigger '{name} for message type '{RINGMQTT_MESSAGE_TYPE}'")
+                self.logger.info(f"Created HA trigger '{name} for message type '{RINGMQTT_MESSAGE_TYPE}'")
 
         return True
 

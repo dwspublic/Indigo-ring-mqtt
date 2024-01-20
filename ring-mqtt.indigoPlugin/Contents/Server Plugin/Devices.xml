@@ -35,6 +35,11 @@
 				<TriggerLabel>status</TriggerLabel>
 				<ControlPageLabel>status</ControlPageLabel>
 			</State>
+			<State id="lastUpdate">
+				<ValueType>String</ValueType>
+				<TriggerLabel>lastUpdate</TriggerLabel>
+				<ControlPageLabel>lastUpdate</ControlPageLabel>
+			</State>
 			<State id="motionDetectionEnabled">
 				<ValueType>String</ValueType>
 				<TriggerLabel>motionDetectionEnabled</TriggerLabel>
@@ -106,6 +111,11 @@
 				<TriggerLabel>status</TriggerLabel>
 				<ControlPageLabel>status</ControlPageLabel>
 			</State>
+			<State id="lastUpdate">
+				<ValueType>String</ValueType>
+				<TriggerLabel>lastUpdate</TriggerLabel>
+				<ControlPageLabel>lastUpdate</ControlPageLabel>
+			</State>
 			<State id="beam_duration">
 				<ValueType>String</ValueType>
 				<TriggerLabel>beam_duration</TriggerLabel>
@@ -166,6 +176,11 @@
 				<ValueType>String</ValueType>
 				<TriggerLabel>status</TriggerLabel>
 				<ControlPageLabel>status</ControlPageLabel>
+			</State>
+			<State id="lastUpdate">
+				<ValueType>String</ValueType>
+				<TriggerLabel>lastUpdate</TriggerLabel>
+				<ControlPageLabel>lastUpdate</ControlPageLabel>
 			</State>
 			<State id="stream_Source">
 				<ValueType>String</ValueType>
@@ -248,6 +263,11 @@
 				<TriggerLabel>status</TriggerLabel>
 				<ControlPageLabel>status</ControlPageLabel>
 			</State>
+			<State id="lastUpdate">
+				<ValueType>String</ValueType>
+				<TriggerLabel>lastUpdate</TriggerLabel>
+				<ControlPageLabel>lastUpdate</ControlPageLabel>
+			</State>
 			<State id="ding_duration">
 				<ValueType>String</ValueType>
 				<TriggerLabel>ding_duration</TriggerLabel>
@@ -308,6 +328,11 @@
 				<ValueType>String</ValueType>
 				<TriggerLabel>status</TriggerLabel>
 				<ControlPageLabel>status</ControlPageLabel>
+			</State>
+			<State id="lastUpdate">
+				<ValueType>String</ValueType>
+				<TriggerLabel>lastUpdate</TriggerLabel>
+				<ControlPageLabel>lastUpdate</ControlPageLabel>
 			</State>
 			<State id="volume">
 				<ValueType>String</ValueType>
@@ -389,6 +414,11 @@
 				<ValueType>String</ValueType>
 				<TriggerLabel>status</TriggerLabel>
 				<ControlPageLabel>status</ControlPageLabel>
+			</State>
+			<State id="lastUpdate">
+				<ValueType>String</ValueType>
+				<TriggerLabel>lastUpdate</TriggerLabel>
+				<ControlPageLabel>lastUpdate</ControlPageLabel>
 			</State>
 			<State id="firmwareStatus">
 				<ValueType>String</ValueType>
