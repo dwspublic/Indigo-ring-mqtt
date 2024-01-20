@@ -180,7 +180,11 @@ class Plugin(indigo.PluginBase):
         if topic_parts[4] == "info":
             p = json.loads(payload)
             device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
-            device.updateStateOnServer(key="lastUpdate", value=self.convertZeroDate(p["lastUpdate"]))
+            q = self.convertZeroDate(p["lastUpdate"])
+            device.updateStateOnServer(key="lastUpdate", value=str(q))
+            r = self.getDuration(q, datetime.datetime.now())
+            if r > 3600:
+                self.logger.info(f"Device {device.name} hasn't communicated from Ring in {r} seconds")
             if device.deviceTypeId == "RingCamera":
                 device.updateStateOnServer(key="stream_Source", value=p["stream_Source"])
         if topic_parts[4] == "motion" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
@@ -191,7 +195,7 @@ class Plugin(indigo.PluginBase):
 
         if topic_parts[4] == "motion" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingMotion":
             p = json.loads(payload)
-            device.updateStateOnServer(key="lastMotionTime", value=self.convertZeroDate(p["lastMotionTime"]))
+            device.updateStateOnServer(key="lastMotionTime", value=str(self.convertZeroDate(p["lastMotionTime"])))
             device.updateStateOnServer(key="personDetected", value=p["personDetected"])
             device.updateStateOnServer(key="motionDetectionEnabled", value=p["motionDetectionEnabled"])
 
@@ -208,8 +212,13 @@ class Plugin(indigo.PluginBase):
 
         if topic_parts[4] == "event_select" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
             p = json.loads(payload)
-            device.updateStateOnServer(key="event_recordingUrl1", value=p["recordingUrl"])
-            device.updateStateOnServer(key="event_eventId1", value=p["eventId"])
+            if p["eventId"] != device.states["event_eventId1"]:
+                device.updateStateOnServer(key="event_recordingUrl3", value=device.states["event_recordingUrl2"])
+                device.updateStateOnServer(key="event_eventId3", value=device.states["event_eventId2"])
+                device.updateStateOnServer(key="event_recordingUrl2", value=device.states["event_recordingUrl1"])
+                device.updateStateOnServer(key="event_eventId2", value=device.states["event_eventId1"])
+                device.updateStateOnServer(key="event_recordingUrl1", value=p["recordingUrl"])
+                device.updateStateOnServer(key="event_eventId1", value=p["eventId"])
 
         if topic_parts[4] == "ding" and topic_parts[5] == "state" and device.deviceTypeId == "RingDoorbell":
             if payload == "ON":
@@ -219,7 +228,7 @@ class Plugin(indigo.PluginBase):
 
         if topic_parts[4] == "ding" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingDoorbell":
             p = json.loads(payload)
-            device.updateStateOnServer(key="lastDingTime", value=self.convertZeroDate(p["lastDingTime"]))
+            device.updateStateOnServer(key="lastDingTime", value=str(self.convertZeroDate(p["lastDingTime"])))
 
         if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
             if payload == "ON":
@@ -261,7 +270,7 @@ class Plugin(indigo.PluginBase):
         if topic_parts[4] == "info":
             p = json.loads(payload)
             device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
-            device.updateStateOnServer(key="lastUpdate", value=self.convertZeroDate(p["lastUpdate"]))
+            device.updateStateOnServer(key="lastUpdate", value=str(self.convertZeroDate(p["lastUpdate"])))
         if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
             if payload == "ON":
                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
@@ -282,7 +291,7 @@ class Plugin(indigo.PluginBase):
         if topic_parts[4] == "info":
             p = json.loads(payload)
             device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
-            device.updateStateOnServer(key="lastUpdate", value=self.convertZeroDate(p["lastUpdate"]))
+            device.updateStateOnServer(key="lastUpdate", value=str(self.convertZeroDate(p["lastUpdate"])))
         if topic_parts[4] == "play_ding_sound" and topic_parts[5] == "state":
             device.updateStateOnServer(key="play_ding_sound", value=payload)
             if payload == "ON":
@@ -322,8 +331,11 @@ class Plugin(indigo.PluginBase):
         d1 = datetime.datetime.fromisoformat(zeroDate.replace('Z', '+00:00'))
         sgtTimeDelta = datetime.timedelta(hours=-5)
         sgtTZObject = datetime.timezone(sgtTimeDelta, name="SGT")
-        d2 = str(d1.astimezone(sgtTZObject))
-        return d2
+        d2 = d1.astimezone(sgtTZObject)
+        d3 = str(d2).replace('-05:00','')
+        d4 = datetime.datetime.strptime(d3, '%Y-%m-%d %H:%M:%S')
+        #self.logger.info(f"Duration from now {self.getDuration(d4)}")
+        return d4
 
     def selectionChanged(self, valuesDict, typeId, devId):
         self.logger.debug("SelectionChanged")
@@ -482,6 +494,48 @@ class Plugin(indigo.PluginBase):
             self.logLevel = int(valuesDict.get("logLevel", logging.INFO))
             self.indigo_log_handler.setLevel(self.logLevel)
 
+    def getDuration(self, then, now=datetime.datetime.now(), interval="seconds"):
+
+        # Returns a duration as specified by variable interval
+        # Functions, except totalDuration, returns [quotient, remainder]
+
+        duration = now - then  # For build-in functions
+        duration_in_s = duration.total_seconds()
+
+        def years():
+            return divmod(duration_in_s, 31536000)  # Seconds in a year=31536000.
+
+        def days(seconds=None):
+            return divmod(seconds if seconds != None else duration_in_s, 86400)  # Seconds in a day = 86400
+
+        def hours(seconds=None):
+            return divmod(seconds if seconds != None else duration_in_s, 3600)  # Seconds in an hour = 3600
+
+        def minutes(seconds=None):
+            return divmod(seconds if seconds != None else duration_in_s, 60)  # Seconds in a minute = 60
+
+        def seconds(seconds = None):
+            if seconds != None:
+                return divmod(seconds, 1)
+            return duration_in_s
+
+        def totalDuration():
+            y = years()
+            d = days(y[1]) # Use remainder to calculate next variable
+            h = hours(d[1])
+            m = minutes(h[1])
+            s = seconds(m[1])
+
+            return "Time between dates: {} years, {} days, {} hours, {} minutes and {} seconds".format(int(y[0]), int(d[0]), int(h[0]), int(m[0]), int(s[0]))
+
+        return {
+            'years': int(years()[0]),
+            'days': int(days()[0]),
+            'hours': int(hours()[0]),
+            'minutes': int(minutes()[0]),
+            'seconds': int(seconds()),
+            'default': totalDuration()
+        }[interval]
 
     ########################################
     # Custom Plugin Action callbacks (defined in Actions.xml)

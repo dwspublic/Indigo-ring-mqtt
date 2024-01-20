@@ -212,6 +212,26 @@
 				<TriggerLabel>event_eventId1</TriggerLabel>
 				<ControlPageLabel>event_eventId1</ControlPageLabel>
 			</State>
+			<State id="event_recordingUrl2">
+				<ValueType>String</ValueType>
+				<TriggerLabel>event_recordingUrl2</TriggerLabel>
+				<ControlPageLabel>event_recordingUrl2</ControlPageLabel>
+			</State>
+			<State id="event_eventId2">
+				<ValueType>String</ValueType>
+				<TriggerLabel>event_eventId2</TriggerLabel>
+				<ControlPageLabel>event_eventId2</ControlPageLabel>
+			</State>
+			<State id="event_recordingUrl3">
+				<ValueType>String</ValueType>
+				<TriggerLabel>event_recordingUrl3</TriggerLabel>
+				<ControlPageLabel>event_recordingUrl3</ControlPageLabel>
+			</State>
+			<State id="event_eventId3">
+				<ValueType>String</ValueType>
+				<TriggerLabel>event_eventId3</TriggerLabel>
+				<ControlPageLabel>event_eventId3</ControlPageLabel>
+			</State>
 			<State id="firmwareStatus">
 				<ValueType>String</ValueType>
 				<TriggerLabel>firmwareStatus</TriggerLabel>
