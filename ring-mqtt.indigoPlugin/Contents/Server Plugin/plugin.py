@@ -12,6 +12,7 @@ except ImportError:
     pass
 
 RINGMQTT_MESSAGE_TYPE = "##ring##"
+kCurDevVersCount = 0  # current version of plugin devices
 
 
 ################################################################################
@@ -28,19 +29,12 @@ class Plugin(indigo.PluginBase):
         self.logLevel = int(self.pluginPrefs.get("logLevel", logging.INFO))
         self.indigo_log_handler.setLevel(self.logLevel)
         self.logger.debug(f"logLevel = {self.logLevel}")
-        self.brokerID = self.pluginPrefs["brokerID"]
+        self.brokerID = pluginPrefs.get("brokerID", "")
+        self.snapshotImagePath = pluginPrefs.get("snapshotImagePath", "")
 
         self.ringmqtt_devices = []
-        self.ring_devices = {}
-        self.ring_battery_devices = {}
-
-        if "ring_devices" not in self.pluginPrefs:
-            self.pluginPrefs["ring_devices"] = str(self.ring_devices)
-        if "ring_battery_devices" not in self.pluginPrefs:
-            self.pluginPrefs["ring_battery_devices"] = str(self.ring_battery_devices)
-
-        self.ring_devices = eval(self.pluginPrefs["ring_devices"])
-        self.ring_battery_devices = eval(self.pluginPrefs["ring_battery_devices"])
+        self.ring_devices = eval(pluginPrefs.get("ring_devices", {}))
+        self.ring_battery_devices = eval(pluginPrefs.get("ring_battery_devices", {}))
 
         self.mqttPlugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.mqtt")
         if not self.mqttPlugin.isEnabled():
@@ -77,6 +71,17 @@ class Plugin(indigo.PluginBase):
         if device.states["batteryLevel2"] == "":
             device.updateStateOnServer(key="batteryLevel2", value="N/A")
         device.stateListOrDisplayStateIdChanged()
+
+        instanceVers = int(device.pluginProps.get('devVersCount', 0))
+        if instanceVers == kCurDevVersCount:
+            self.logger.debug(f"{device.name}: Device is current version: {instanceVers}")
+        elif instanceVers < kCurDevVersCount:
+            newProps = device.pluginProps
+            newProps["devVersCount"] = kCurDevVersCount
+            device.replacePluginPropsOnServer(newProps)
+            self.logger.debug(f"{device.name}: Updated device version: {instanceVers} -> {kCurDevVersCount}")
+        else:
+            self.logger.warning(f"{device.name}: Invalid device version: {instanceVers}")
 
     def deviceStopComm(self, device):
         self.logger.info(f"{device.name}: Stopping Device")

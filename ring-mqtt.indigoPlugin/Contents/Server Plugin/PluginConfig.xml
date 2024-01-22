@@ -22,4 +22,7 @@
     <Field id="batterystateUI" type="checkbox" defaultValue="false">
         <Label>Display higher battery percentage</Label>
     </Field>
+    <Field id="snapshotImagePath" type="textfield" defaultValue="">
+        <Label>Webserver Directory for storing Snapshot Images:</Label>
+    </Field>
 </PluginConfig>
