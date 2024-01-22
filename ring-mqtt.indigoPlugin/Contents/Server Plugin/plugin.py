@@ -123,7 +123,7 @@ class Plugin(indigo.PluginBase):
                         self.processZMessage(device, topic_parts, payload)
 
             elif topic_parts[0] == "homeassistant":
-                self.processHAMessage(topic_parts, payload)
+                self.processHADMessage(topic_parts, payload)
 
     def deviceImageUpdate(self):
         for device_id in self.ringmqtt_devices:
