@@ -1,13 +1,14 @@
 # python3.10
 
 import random
+import time
 
 from paho.mqtt import client as mqtt_client
 
 
 broker = '192.168.1.10'
 port = 1883
-topic = "ring/dpwhwp-3qqos-0/camera/0cae7dc23ab7/snapshot/image"
+topic = "test/image"
 # Generate a Client ID with the subscribe prefix.
 client_id = f'subscribe-{random.randint(0, 100)}'
 # username = 'emqx'
@@ -28,24 +29,32 @@ def connect_mqtt() -> mqtt_client:
     return client
 
 
-def subscribe(client: mqtt_client):
-    def on_message(client, userdata, msg):
-        print(f"Received a message from `{msg.topic}` topic")
-        topic_parts = msg.topic.split("/")
-        indigowebpath = "/Library/Application Support/Perceptive Automation/Indigo 2022.2/Web Assets/public/images/"
-        indigosnapshotfilename = topic_parts[1] + '-' + topic_parts[3] + '-snapshot.jpg'
-        test_file = open(f'{indigowebpath}{indigosnapshotfilename}', 'wb')
-        test_file.write(msg.payload)
-        test_file.close()
-
-    client.subscribe(topic)
-    client.on_message = on_message
+def publish(client):
+    msg_count = 1
+    while True:
+        time.sleep(1)
+        #msg = f"messages: {msg_count}"
+        f = open("/Users/darrylscott/Pictures/testimage.jpg", "rb")
+        imagestring = f.read()
+        byteArray = bytes(imagestring)
+        result = client.publish(topic, byteArray, 0)
+        #result = client.publish(topic, msg)
+        # result: [0, 1]
+        status = result[0]
+        if status == 0:
+            print(f"Send image to topic `{topic}`")
+        else:
+            print(f"Failed to send message to topic {topic}")
+        msg_count += 1
+        if msg_count > 2:
+            break
 
 
 def run():
     client = connect_mqtt()
-    subscribe(client)
-    client.loop_forever()
+    client.loop_start()
+    publish(client)
+    client.loop_stop()
 
 
 if __name__ == '__main__':

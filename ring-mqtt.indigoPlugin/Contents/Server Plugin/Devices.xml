@@ -247,7 +247,13 @@
 				<TriggerLabel>batteryLevel2</TriggerLabel>
 				<ControlPageLabel>batteryLevel2</ControlPageLabel>
 			</State>
+			<State id="state">
+				<ValueType>String</ValueType>
+				<TriggerLabel>state</TriggerLabel>
+				<ControlPageLabel>state</ControlPageLabel>
+			</State>
 		</States>
+		<UiDisplayStateId>state</UiDisplayStateId>
 	</Device>
 	<Device type="relay" subType="kRelayDeviceSubType.Doorbell" id="RingDoorbell">
 		<Name>Ring Doorbell</Name>

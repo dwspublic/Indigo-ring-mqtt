@@ -5,6 +5,7 @@
 import logging
 import json
 import datetime
+import base64
 try:
     import indigo
 except ImportError:
@@ -68,8 +69,14 @@ class Plugin(indigo.PluginBase):
             self.ringmqtt_devices.append(device.id)
         if device.deviceTypeId == "RingLight":
             device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+        elif device.deviceTypeId == "RingCamera":
+            device.updateStateImageOnServer(indigo.kStateImageSel.SensorOff)
+            device.updateStateOnServer(key="state", value="Not Connected")
         else:
             device.updateStateImageOnServer(indigo.kStateImageSel.Auto)
+        if device.states["batteryLevel2"] == "":
+            device.updateStateOnServer(key="batteryLevel2", value="N/A")
+        device.stateListOrDisplayStateIdChanged()
 
     def deviceStopComm(self, device):
         self.logger.info(f"{device.name}: Stopping Device")
@@ -81,16 +88,19 @@ class Plugin(indigo.PluginBase):
         if notification["message_type"] != RINGMQTT_MESSAGE_TYPE:
             return
 
-        props = {'message_type': RINGMQTT_MESSAGE_TYPE}
+        props = {'message_type': RINGMQTT_MESSAGE_TYPE, 'message_encode': True}
         brokerID = int(notification['brokerID'])
         while True:
+            #self.logger.warning("About to call fetchQueuedMessage")
             message_data = self.mqttPlugin.executeAction("fetchQueuedMessage", deviceId=brokerID, props=props, waitUntilDone=True)
             if message_data is None:
                 break
-            self.logger.debug(f"processMessage: {message_data}")
+            #self.logger.debug(f"processMessage: {message_data}")
 
             topic_parts = message_data["topic_parts"]
-            payload = message_data["payload"]
+            payload = base64.b64decode(message_data['payload'])
+            #self.logger.debug(f"processMessage:topic_parts {topic_parts}")
+            #self.logger.debug(f"processMessage:payload {payload}")
 
             if topic_parts[0] == "ring":
                 for device_id in self.ringmqtt_devices:
@@ -126,11 +136,13 @@ class Plugin(indigo.PluginBase):
     def deviceRingCacheCheck(self):
         for device_id in self.ringmqtt_devices:
             device = indigo.devices[device_id]
+            device.setErrorStateOnServer(u"")
             if device.address not in self.ring_devices:
-                self.logger.info(f"deviceRingCacheCheck - Device Name:{device.name} - Device Address{device.address}")
+                self.logger.error(f"deviceRingCacheCheck - Device Name:{device.name} - Device Address{device.address}")
+                device.setErrorStateOnServer(u"no ack")
 
-    def processHAMessage(self, topic_parts, payload):
-        self.logger.debug(f"processHAMessage: {topic_parts}:{payload}")
+    def processHADMessage(self, topic_parts, payload):
+        self.logger.debug(f"processHADMessage: {topic_parts}:{payload}")
 
         if topic_parts[1] == "binary_sensor":
             if "_motion" in topic_parts[3]:
@@ -173,7 +185,7 @@ class Plugin(indigo.PluginBase):
                 self.ring_devices[topic_parts[2] + "-L-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingLight"]
                 return
     def processCMessage(self, device, topic_parts, payload):
-        self.logger.debug(f"processCMessage: {topic_parts}:{payload} - Device:{device.name}")
+        #self.logger.debug(f"processCMessage: {topic_parts}:{payload} - Device:{device.name}")
 
         if topic_parts[4] == "status":
             device.updateStateOnServer(key="status", value=payload)
@@ -183,8 +195,15 @@ class Plugin(indigo.PluginBase):
             q = self.convertZeroDate(p["lastUpdate"])
             device.updateStateOnServer(key="lastUpdate", value=str(q))
             r = self.getDuration(q, datetime.datetime.now())
-            if r > 3600:
-                self.logger.info(f"Device {device.name} hasn't communicated from Ring in {r} seconds")
+            if r > 21600:
+                self.logger.warning(f"Device {device.name} hasn't had communication from Ring in {r} seconds")
+                if device.deviceTypeId == "RingCamera":
+                    device.updateStateImageOnServer(indigo.kStateImageSel.SensorOff)
+                    device.updateStateOnServer(key="state", value="Not Connected")
+            else:
+                if device.deviceTypeId == "RingCamera":
+                    device.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+                    device.updateStateOnServer(key="state", value="Connected")
             if device.deviceTypeId == "RingCamera":
                 device.updateStateOnServer(key="stream_Source", value=p["stream_Source"])
         if topic_parts[4] == "motion" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
@@ -199,13 +218,18 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="personDetected", value=p["personDetected"])
             device.updateStateOnServer(key="motionDetectionEnabled", value=p["motionDetectionEnabled"])
 
+        if topic_parts[4] == "motion_duration" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
+            device.updateStateOnServer(key="motion_duration", value=payload)
+
         if topic_parts[4] == "snapshot" and topic_parts[5] == "image" and device.deviceTypeId == "RingCamera":
-            device.updateStateOnServer(key="snapshot_image", value=payload)
-            test_file = open('/Users/darrylscott/Pictures/test_file.dat','ab')
+            #self.logger.warning("About to process camera snapshot image message")
+            #device.updateStateOnServer(key="snapshot_image", value=payload)
+            test_file = open('/Users/darrylscott/Pictures/testimage.jpg','wb')
             test_file.write(payload)
             test_file.close()
 
         if topic_parts[4] == "snapshot" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
+            #self.logger.warning("About to process camera snapshot attributes message")
             p = json.loads(payload)
             device.updateStateOnServer(key="snapshot_timestamp", value=str(datetime.datetime.fromtimestamp(p["timestamp"])))
             device.updateStateOnServer(key="snapshot_type", value=p["type"])
@@ -363,14 +387,14 @@ class Plugin(indigo.PluginBase):
             else:
                 device.updateStateImageOnServer(indigo.kStateImageSel.Auto)
         return
-    def force_ha_messages(self, valuesDict, typeId):
+    def generate_HAD_messages(self, valuesDict, typeId):
         self.logger.debug(f"Clear Device Cache and rebuild")
 
         self.ring_devices = {}
         self.ring_battery_devices = {}
         brokerID = int(self.brokerID)
-        self.publish_topic(brokerID, "HA_Message_Refresh", f"hass/status", "online")
-        self.logger.info(f"Sent Haas/Status - online - devices should be updated shortly")
+        self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
+        self.logger.info(f"Sent haas/status - online - devices should be updated shortly")
 
         return True
 

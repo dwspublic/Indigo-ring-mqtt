@@ -9,9 +9,9 @@
             </Field>
         </ConfigUI>
 	</MenuItem>
-    <MenuItem id="ha_messages">
-		<Name>Clear and reload Device Cache</Name>
-		<CallbackMethod>force_ha_messages</CallbackMethod>
+    <MenuItem id="HAD_messages">
+		<Name>Reload Device Cache/HA Discovery</Name>
+		<CallbackMethod>generate_HAD_messages</CallbackMethod>
         <ConfigUI>
             <Field id="brokerID" type="menu">
                 <Label>MQTT Broker:</Label>
