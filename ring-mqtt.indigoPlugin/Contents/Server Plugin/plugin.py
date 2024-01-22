@@ -31,6 +31,9 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"logLevel = {self.logLevel}")
         self.brokerID = pluginPrefs.get("brokerID", "")
         self.snapshotImagePath = pluginPrefs.get("snapshotImagePath", "")
+        if self.snapshotImagePath == "":
+            self.snapshotImagePath = indigo.server.getInstallFolderPath()
+            self.pluginPrefs["snapshotImagePath"] = self.snapshotImagePath
 
         self.ringmqtt_devices = []
         self.ring_devices = eval(pluginPrefs.get("ring_devices", {}))
@@ -228,8 +231,8 @@ class Plugin(indigo.PluginBase):
 
         if topic_parts[4] == "snapshot" and topic_parts[5] == "image" and device.deviceTypeId == "RingCamera":
             #self.logger.warning("About to process camera snapshot image message")
-            #device.updateStateOnServer(key="snapshot_image", value=payload)
-            test_file = open('/Users/darrylscott/Pictures/testimage.jpg','wb')
+            device.updateStateOnServer(key="snapshot_image", value="http://localhost:8176/images/" + device.address + ".jpg")
+            test_file = open(self.snapshotImagePath + 'images/' + device.address + '.jpg','wb')
             test_file.write(payload)
             test_file.close()
 
