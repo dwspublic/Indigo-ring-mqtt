@@ -51,6 +51,9 @@ class Plugin(indigo.PluginBase):
         self.logger.info("Starting ringmqtt")
         indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
         self.deviceRingCacheCheck()
+        if self.pluginPrefs.get("startupHADiscovery", False):
+            brokerID = int(self.brokerID)
+            self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
 
     def shutdown(self):
         self.logger.info("Stopping ringmqtt")
@@ -134,6 +137,7 @@ class Plugin(indigo.PluginBase):
                 self.processHADMessage(topic_parts, payload)
 
     def deviceImageUpdate(self):
+        # Not sure this is required anymore
         for device_id in self.ringmqtt_devices:
             device = indigo.devices[device_id]
             if device.deviceTypeId == "RingLight":
@@ -203,8 +207,8 @@ class Plugin(indigo.PluginBase):
             q = self.convertZeroDate(p["lastUpdate"])
             device.updateStateOnServer(key="lastUpdate", value=str(q))
             r = self.getDuration(q, datetime.datetime.now())
-            if r > 21600:
-                self.logger.warning(f"Device {device.name} hasn't had communication from Ring in {r} seconds")
+            if r > int(self.pluginPrefs.get("ringCommAlertHours","06")):
+                self.logger.warning(f"Device {device.name} hasn't had communication from Ring in {r} hours")
                 if device.deviceTypeId == "RingCamera":
                     device.updateStateImageOnServer(indigo.kStateImageSel.SensorOff)
                     device.updateStateOnServer(key="state", value="Not Connected")
@@ -232,7 +236,7 @@ class Plugin(indigo.PluginBase):
         if topic_parts[4] == "snapshot" and topic_parts[5] == "image" and device.deviceTypeId == "RingCamera":
             #self.logger.warning("About to process camera snapshot image message")
             device.updateStateOnServer(key="snapshot_image", value="http://localhost:8176/images/" + device.address + ".jpg")
-            test_file = open(self.snapshotImagePath + 'images/' + device.address + '.jpg','wb')
+            test_file = open(self.snapshotImagePath + '/Web Assets/images/ring/' + device.address + '.jpg','wb')
             test_file.write(payload)
             test_file.close()
 
@@ -282,7 +286,7 @@ class Plugin(indigo.PluginBase):
         if topic_parts[4] == "battery" and topic_parts[5] == "attributes":
             p = json.loads(payload)
             if "batteryLife2" in p:
-                if int(p["batteryLife2"]) > int(p["batteryLife"]) and self.pluginPrefs["batterystateUI"]:
+                if int(p["batteryLife2"]) > int(p["batteryLife"]) and self.pluginPrefs.get("batterystateUI", False):
                     b1 = p["batteryLife2"]
                     b2 = p["batteryLife"]
                 else:
@@ -314,6 +318,11 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="brightness_state", value=payload)
         if topic_parts[4] == "beam_duration" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
             device.updateStateOnServer(key="beam_duration", value=payload)
+        if topic_parts[4] == "motion" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
+            if payload == "ON":
+                device.updateStateOnServer(key="onOffState", value=True)
+            else:
+                device.updateStateOnServer(key="onOffState", value=False)
 
     def processZMessage(self, device, topic_parts, payload):
         self.logger.debug(f"processZMessage: {topic_parts}:{payload} - Device:{device.name}")
@@ -526,7 +535,7 @@ class Plugin(indigo.PluginBase):
             self.logLevel = int(valuesDict.get("logLevel", logging.INFO))
             self.indigo_log_handler.setLevel(self.logLevel)
 
-    def getDuration(self, then, now=datetime.datetime.now(), interval="seconds"):
+    def getDuration(self, then, now=datetime.datetime.now(), interval="hours"):
 
         # Returns a duration as specified by variable interval
         # Functions, except totalDuration, returns [quotient, remainder]

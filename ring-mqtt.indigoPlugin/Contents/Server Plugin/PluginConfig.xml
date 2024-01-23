@@ -22,6 +22,19 @@
     <Field id="batterystateUI" type="checkbox" defaultValue="false">
         <Label>Display higher battery percentage</Label>
     </Field>
+    <Field id="startupHADiscovery" type="checkbox" defaultValue="false">
+        <Label>On Plugin Startup - initiate HA Discovery</Label>
+    </Field>
+    <Field id="ringCommAlertHours" type="menu" defaultValue="06">
+        <Label>Log Event when Ring Device hasn't been updated in (hours):</Label>
+        <List>
+            <Option value="01">One Hour</Option>
+            <Option value="03">Three Hours</Option>
+            <Option value="06">Six Hours</Option>
+            <Option value="12">Twelve Hours</Option>
+            <Option value="999999999">Never</Option>
+        </List>
+    </Field>
     <Field id="snapshotImagePath" type="textfield" defaultValue="">
         <Label>Webserver Directory for storing Snapshot Images:</Label>
     </Field>
