@@ -36,8 +36,8 @@ class Plugin(indigo.PluginBase):
             self.pluginPrefs["snapshotImagePath"] = self.snapshotImagePath
 
         self.ringmqtt_devices = []
-        self.ring_devices = eval(pluginPrefs.get("ring_devices", {}))
-        self.ring_battery_devices = eval(pluginPrefs.get("ring_battery_devices", {}))
+        self.ring_devices = eval(pluginPrefs.get("ring_devices", "{}"))
+        self.ring_battery_devices = eval(pluginPrefs.get("ring_battery_devices", "{}"))
 
         self.mqttPlugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.mqtt")
         if not self.mqttPlugin.isEnabled():
