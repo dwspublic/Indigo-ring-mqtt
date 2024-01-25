@@ -59,6 +59,7 @@ class Plugin(indigo.PluginBase):
         self.logger.info("Stopping ringmqtt")
         self.pluginPrefs["ring_devices"] = str(self.ring_devices)
         self.pluginPrefs["ring_battery_devices"] = str(self.ring_battery_devices)
+
     def message_handler(self, notification):
         self.logger.debug(f"message_handler: MQTT message {notification['message_type']} from {indigo.devices[int(self.brokerID)].name}")
         self.processMessage(notification)
@@ -114,7 +115,10 @@ class Plugin(indigo.PluginBase):
             #self.logger.debug(f"processMessage:payload {payload}")
 
             if topic_parts[0] == "ring":
-                if topic_parts[5] != "image":
+                if len(topic_parts) > 5:
+                    if topic_parts[5] != "image":
+                        payload = payload.decode("ascii")
+                else:
                     payload = payload.decode("ascii")
                 for device_id in self.ringmqtt_devices:
                     device = indigo.devices[device_id]
