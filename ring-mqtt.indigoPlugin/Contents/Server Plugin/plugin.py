@@ -114,6 +114,8 @@ class Plugin(indigo.PluginBase):
             #self.logger.debug(f"processMessage:payload {payload}")
 
             if topic_parts[0] == "ring":
+                if topic_parts[5] != "image":
+                    payload = payload.decode("ascii")
                 for device_id in self.ringmqtt_devices:
                     device = indigo.devices[device_id]
 
@@ -134,6 +136,7 @@ class Plugin(indigo.PluginBase):
                         self.processZMessage(device, topic_parts, payload)
 
             elif topic_parts[0] == "homeassistant":
+                payload = payload.decode("ascii")
                 self.processHADMessage(topic_parts, payload)
 
     def deviceImageUpdate(self):
