@@ -9,7 +9,7 @@
     <key>IwsApiVersion</key>
     <string>1.0.0</string>
     <key>CFBundleName</key>
-    <string>ring-mqtt</string>
+    <string>Ring MQTT</string>
     <key>CFBundleDisplayName</key>
     <string>Ring MQTT</string>
     <key>CFBundleIdentifier</key>

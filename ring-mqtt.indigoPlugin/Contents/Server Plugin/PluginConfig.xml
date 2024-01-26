@@ -35,7 +35,10 @@
             <Option value="999999999">Never</Option>
         </List>
     </Field>
+    <Field id="storeSnapShots" type="checkbox" defaultValue="false">
+        <Label>Store Camera Snapshots:</Label>
+    </Field>
     <Field id="snapshotImagePath" type="textfield" defaultValue="">
-        <Label>Webserver Directory for storing Snapshot Images:</Label>
+        <Label>Path for storing Snapshot Images (leave blank for Indigo Webserver):</Label>
     </Field>
 </PluginConfig>
