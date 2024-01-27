@@ -15,6 +15,9 @@
 			<Field id="snooze_minutes" type="textfield">
                 <Label>Minutes to Snooze (1 - 1440):</Label>
             </Field>
+            <Field id="play_motion_sound" type="checkbox" defaultValue="false">
+                <Label>Play Motion Sound:</Label>
+            </Field>
             <Field id="retainNote" type="label" fontSize="small" fontColor="darkgray">
                 <Label>Blank fields are ignored.</Label>
             </Field>

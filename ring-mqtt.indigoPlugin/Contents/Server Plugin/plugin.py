@@ -105,19 +105,23 @@ class Plugin(indigo.PluginBase):
             message_data = self.mqttPlugin.executeAction("fetchQueuedMessage", deviceId=brokerID, props=props, waitUntilDone=True)
             if message_data is None:
                 break
-            #self.logger.debug(f"processMessage: {message_data}")
+            self.logger.debug(f"processMessage: {message_data}")
 
             topic_parts = message_data["topic_parts"]
             payload = base64.b64decode(message_data['payload'])
-            #self.logger.debug(f"processMessage:topic_parts {topic_parts}")
-            #self.logger.debug(f"processMessage:payload {payload}")
 
             if topic_parts[0] == "ring":
+
+                payloadimage = ""
                 if len(topic_parts) > 5:
                     if topic_parts[5] != "image":
                         payload = payload.decode("ascii")
+                    else:
+                        payloadimage = payload
+                        payload = "Binary Image Hidden"
                 else:
                     payload = payload.decode("ascii")
+
                 for device_id in self.ringmqtt_devices:
                     device = indigo.devices[device_id]
 
@@ -127,7 +131,7 @@ class Plugin(indigo.PluginBase):
                         continue
 
                     if topic_parts[2] == "camera":
-                        self.processCMessage(device, topic_parts, payload)
+                        self.processCMessage(device, topic_parts, payload, payloadimage)
                         self.processBMessage(device, topic_parts, payload)
 
                     if topic_parts[2] == "lighting":
@@ -140,15 +144,6 @@ class Plugin(indigo.PluginBase):
             elif topic_parts[0] == "homeassistant":
                 payload = payload.decode("ascii")
                 self.processHADMessage(topic_parts, payload)
-
-    def deviceImageUpdate(self):
-        # Not sure this is required anymore
-        for device_id in self.ringmqtt_devices:
-            device = indigo.devices[device_id]
-            if device.deviceTypeId == "RingLight":
-                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
-            else:
-                device.updateStateImageOnServer(indigo.kStateImageSel.Auto)
 
     def deviceRingCacheCheck(self, devId):
         device = indigo.devices[devId]
@@ -206,8 +201,8 @@ class Plugin(indigo.PluginBase):
                 q = p["device"]
                 self.ring_devices[topic_parts[2] + "-L-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingLight"]
                 return
-    def processCMessage(self, device, topic_parts, payload):
-        #self.logger.debug(f"processCMessage: {topic_parts}:{payload} - Device:{device.name}")
+    def processCMessage(self, device, topic_parts, payload, payloadimage):
+        self.logger.debug(f"processCMessage: {topic_parts}:{payload} - Device:{device.name}")
 
         if topic_parts[4] == "status":
             device.updateStateOnServer(key="status", value=payload)
@@ -247,14 +242,14 @@ class Plugin(indigo.PluginBase):
             #self.logger.warning("About to process camera snapshot image message")
             if self.pluginPrefs.get("storeSnapShots", False):
                 if self.snapshotImagePath == "":
-                    tpath = indigo.server.getInstallFolderPath() + '/Web Assets/images/ring/'
-                    device.updateStateOnServer(key="snapshot_image", value="http://localhost:8176/images/ring/" + device.address + ".jpg")
+                    tpath = indigo.server.getInstallFolderPath() + '/Web Assets/public/ring/'
+                    device.updateStateOnServer(key="snapshot_image", value="http://localhost:8176/public/ring/" + device.address + ".jpg")
                 else:
                     tpath = self.pluginPrefs.get("snapshotImagePath", "")
                     device.updateStateOnServer(key="snapshot_image", value=tpath + device.address + ".jpg")
                 if os.path.isdir(tpath):
                     test_file = open(tpath + device.address + '.jpg','wb')
-                    test_file.write(payload)
+                    test_file.write(payloadimage)
                     test_file.close()
 
         if topic_parts[4] == "snapshot" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
@@ -387,13 +382,16 @@ class Plugin(indigo.PluginBase):
 
     def convertZeroDate(self, zeroDate=""):
         d1 = datetime.datetime.fromisoformat(zeroDate.replace('Z', '+00:00'))
-        sgtTimeDelta = datetime.timedelta(hours=-5)
+        gmtoffset = int(datetime.datetime.now().astimezone().strftime("%z")[0:3])
+        sgtTimeDelta = datetime.timedelta(hours=gmtoffset)
         sgtTZObject = datetime.timezone(sgtTimeDelta, name="SGT")
         d2 = d1.astimezone(sgtTZObject)
-        d3 = str(d2).replace('-05:00','')
-        d4 = datetime.datetime.strptime(d3, '%Y-%m-%d %H:%M:%S')
+        #d3 = str(d2).replace('-05:00','')
+        #d4 = datetime.datetime.strptime(d3, '%Y-%m-%d %H:%M:%S')
+        d4 = datetime.datetime.strftime(d2, '%Y-%m-%d %H:%M:%S')
+        d5 = datetime.datetime.strptime(d4, '%Y-%m-%d %H:%M:%S')
         #self.logger.info(f"Duration from now {self.getDuration(d4)}")
-        return d4
+        return d5
 
     def selectionChanged(self, valuesDict, typeId, devId):
         self.logger.debug("SelectionChanged")
@@ -596,24 +594,13 @@ class Plugin(indigo.PluginBase):
         }[interval]
 
     ########################################
-    # Custom Plugin Action callbacks (defined in Actions.xml)
-    ########################################
-
-    def pickDevice(self, filter=None, valuesDict=None, typeId=0, targetId=0):
-        retList = []
-        for devID in self.shimDevices:
-            device = indigo.devices[int(devID)]
-            retList.append((device.id, device.name))
-        retList.sort(key=lambda tup: tup[1])
-        return retList
-
-    ########################################
     # Plugin Actions object callbacks (pluginAction is an Indigo plugin action instance)
     ########################################
 
     def publishChimeAction(self, pluginAction, chimeDevice, callerWaitingForResult):
         brokerID = int(self.brokerID)
         topicType = "chime"
+        self.logger.debug(f"{chimeDevice.name}: publishChimeAction")
         if pluginAction.props["volume"] != "":
             payload = indigo.activePlugin.substitute(pluginAction.props["volume"])
             self.publish_topic(brokerID, chimeDevice.name,
@@ -629,13 +616,16 @@ class Plugin(indigo.PluginBase):
             self.publish_topic(brokerID, chimeDevice.name,
                            f"ring/{self.ring_devices[chimeDevice.address][4]}/{topicType}/{self.ring_devices[chimeDevice.address][3]}/snooze/command",
                            payload)
-        #pubDevice = indigo.devices[int(pluginAction.props["device"])]
-        #payload = make_dev_dict(pubDevice)
-        #self.logger.debug(f"{brokerDevice.name}: publishDeviceAction {topic}: {payload}, {qos}, {retain}")
+        if pluginAction.props["play_motion_sound"] is True:
+            payload = "ON"
+            self.publish_topic(brokerID, chimeDevice.name,
+                           f"ring/{self.ring_devices[chimeDevice.address][4]}/{topicType}/{self.ring_devices[chimeDevice.address][3]}/play_motion_sound/command",
+                           payload)
 
     def publishMotionAction(self, pluginAction, motionDevice, callerWaitingForResult):
         brokerID = int(self.brokerID)
         topicType = "camera"
+        self.logger.debug(f"{motionDevice.name}: publishMotionAction")
         if pluginAction.props["motion_detection"] != "":
             payload = indigo.activePlugin.substitute(pluginAction.props["motion_detection"])
             self.publish_topic(brokerID, motionDevice.name,
@@ -646,13 +636,11 @@ class Plugin(indigo.PluginBase):
             self.publish_topic(brokerID, motionDevice.name,
                            f"ring/{self.ring_devices[motionDevice.address][4]}/{topicType}/{self.ring_devices[motionDevice.address][3]}/motion_warning/command",
                            payload)
-        #pubDevice = indigo.devices[int(pluginAction.props["device"])]
-        #payload = make_dev_dict(pubDevice)
-        #self.logger.debug(f"{brokerDevice.name}: publishDeviceAction {topic}: {payload}, {qos}, {retain}")
 
     def publishLightAction(self, pluginAction, lightDevice, callerWaitingForResult):
         brokerID = int(self.brokerID)
         topicType = "camera"
+        self.logger.debug(f"{lightDevice.name}: publishLightAction")
         if pluginAction.props["brightness"] != "":
             payload = indigo.activePlugin.substitute(pluginAction.props["brightness"])
             self.publish_topic(brokerID, lightDevice.name,
@@ -663,13 +651,11 @@ class Plugin(indigo.PluginBase):
             self.publish_topic(brokerID, lightDevice.name,
                            f"ring/{self.ring_devices[lightDevice.address][4]}/{topicType}/{self.ring_devices[lightDevice.address][3]}/duration/command",
                            payload)
-        #pubDevice = indigo.devices[int(pluginAction.props["device"])]
-        #payload = make_dev_dict(pubDevice)
-        #self.logger.debug(f"{brokerDevice.name}: publishDeviceAction {topic}: {payload}, {qos}, {retain}")
 
     def publishCameraAction(self, pluginAction, cameraDevice, callerWaitingForResult):
         brokerID = int(self.brokerID)
         topicType = "camera"
+        self.logger.debug(f"{cameraDevice.name}: publishCameraAction")
         if pluginAction.props["snapshot_interval"] != "":
             payload = indigo.activePlugin.substitute(pluginAction.props["snapshot_interval"])
             self.publish_topic(brokerID, cameraDevice.name,
@@ -680,8 +666,5 @@ class Plugin(indigo.PluginBase):
             self.publish_topic(brokerID, cameraDevice.name,
                            f"ring/{self.ring_devices[cameraDevice.address][4]}/{topicType}/{self.ring_devices[cameraDevice.address][3]}/stream/command",
                            payload)
-        #pubDevice = indigo.devices[int(pluginAction.props["device"])]
-        #payload = make_dev_dict(pubDevice)
-        #self.logger.debug(f"{brokerDevice.name}: publishDeviceAction {topic}: {payload}, {qos}, {retain}")
 
 
