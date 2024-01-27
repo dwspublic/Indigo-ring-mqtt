@@ -90,8 +90,8 @@ class Plugin(indigo.PluginBase):
     def deviceStopComm(self, device):
         self.logger.info(f"{device.name}: Stopping Device")
         if device.id in self.ringmqtt_devices:
-            self.deviceRingCacheCheck(device.id)
             self.ringmqtt_devices.remove(device.id)
+            self.deviceRingCacheCheck(device.id)
 
     def processMessage(self, notification):
 
@@ -146,17 +146,21 @@ class Plugin(indigo.PluginBase):
                 self.processHADMessage(topic_parts, payload)
 
     def deviceRingCacheCheck(self, devId):
-        device = indigo.devices[devId]
-        device.setErrorStateOnServer(u"")
-        if device.address not in self.ring_devices:
-            self.logger.error(f"deviceRingCacheCheck - Device Name:{device.name} - Device Address{device.address}")
-            device.setErrorStateOnServer(u"no ack")
+        try:
+            device = indigo.devices[devId]
+        except:
+            self.logger.debug(f"Device {devId} not found - Occurs after Deleting Indigo Device")
         else:
-            newProps = device.pluginProps
-            newProps["name"] = self.ring_devices[device.address][0]
-            newProps["manufacturer"] = self.ring_devices[device.address][1]
-            newProps["model"] = self.ring_devices[device.address][2]
-            device.replacePluginPropsOnServer(newProps)
+            device.setErrorStateOnServer(u"")
+            if device.address not in self.ring_devices:
+                self.logger.error(f"deviceRingCacheCheck - Device Name:{device.name} - Device Address{device.address}")
+                device.setErrorStateOnServer(u"no ack")
+            else:
+                newProps = device.pluginProps
+                newProps["name"] = self.ring_devices[device.address][0]
+                newProps["manufacturer"] = self.ring_devices[device.address][1]
+                newProps["model"] = self.ring_devices[device.address][2]
+                device.replacePluginPropsOnServer(newProps)
 
     def processHADMessage(self, topic_parts, payload):
         self.logger.debug(f"processHADMessage: {topic_parts}:{payload}")
@@ -257,6 +261,20 @@ class Plugin(indigo.PluginBase):
             p = json.loads(payload)
             device.updateStateOnServer(key="snapshot_timestamp", value=str(datetime.datetime.fromtimestamp(p["timestamp"])))
             device.updateStateOnServer(key="snapshot_type", value=p["type"])
+
+        if topic_parts[4] == "snapshot_mode" and topic_parts[5] == "state" and device.deviceTypeId == "RingCamera":
+            if device.pluginProps["snapshot_mode"] != payload:
+                self.logger.warning(f'Snapshot Mode different for device {device.name} : PluginProps: {device.pluginProps["snapshot_mode"]}  Payload: {payload}')
+                newProps = device.pluginProps
+                newProps["snapshot_mode"] = payload
+                device.replacePluginPropsOnServer(newProps)
+
+        if topic_parts[4] == "snapshot_interval" and topic_parts[5] == "state" and device.deviceTypeId == "RingCamera":
+            if device.pluginProps["snapshot_interval"] != payload:
+                self.logger.warning(f'Snapshot Interval different for device {device.name} : PluginProps: {device.pluginProps["snapshot_interval"]}  Payload: {payload}')
+                newProps = device.pluginProps
+                newProps["snapshot_interval"] = payload
+                device.replacePluginPropsOnServer(newProps)
 
         if topic_parts[4] == "event_select" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
             p = json.loads(payload)
@@ -414,11 +432,22 @@ class Plugin(indigo.PluginBase):
     def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
         if not userCancelled:
             device = indigo.devices[devId]
-            if typeId == "RingLight":
-                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
-            else:
-                device.updateStateImageOnServer(indigo.kStateImageSel.Auto)
+            if device.deviceTypeId == "RingCamera":
+                self.publishSnapshotProps(device.pluginProps.get("snapshot_mode",""), device.pluginProps.get("snapshot_interval",""), valuesDict["snapshot_mode"], valuesDict["snapshot_interval"], device.name, valuesDict["address"])
         return
+    def publishSnapshotProps(self, origsnapshotMode, origsnapshotInterval, newsnapshotMode, newsnapshotInterval, devName, devAddress):
+        brokerID = int(self.brokerID)
+        topicType = "camera"
+        self.logger.debug(f"{devName}: publishSnapshotProps")
+        if newsnapshotMode != "" and origsnapshotMode != newsnapshotMode:
+            payload = newsnapshotMode
+            self.logger.warning(f'Snapshot Mode Publish for device {devName} : Payload: {payload}')
+            self.publish_topic(brokerID, devName,f"ring/{self.ring_devices[devAddress][4]}/{topicType}/{self.ring_devices[devAddress][3]}/snapshot_mode/command", payload)
+        elif newsnapshotInterval != "" and origsnapshotInterval != newsnapshotInterval:
+            payload = newsnapshotInterval
+            self.logger.warning(f'Snapshot Interval Publish for device {devName} : Payload: {payload}')
+            self.publish_topic(brokerID, devName,f"ring/{self.ring_devices[devAddress][4]}/{topicType}/{self.ring_devices[devAddress][3]}/snapshot_interval/command", payload)
+
     def generate_HAD_messages(self, valuesDict, typeId):
         self.logger.debug(f"Clear Device Cache and rebuild")
 

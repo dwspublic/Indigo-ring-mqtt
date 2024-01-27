@@ -170,7 +170,21 @@
 			<Field type="textfield" id="model" readonly="true">
 				<Label>Model:</Label>
 			</Field>
-		</ConfigUI>
+       	    <Field type="menu" id="snapshot_mode" defaultValue="Auto">
+        		<Label>Snapshot Mode:</Label>
+        		<List>
+        			<Option value="Auto">Auto</Option>
+        			<Option value="Motion">Motion</Option>
+        			<Option value="Motion + Ding">Motion + Ding</Option>
+        			<Option value="Interval">Interval</Option>
+        			<Option value="All">All</Option>
+        			<Option value="Disabled">Disabled</Option>
+        		</List>
+        	</Field>
+			<Field type="textfield" id="snapshot_interval" readonly="false" defaultValue="3600">
+				<Label>Snapshot Interval (seconds):</Label>
+			</Field>
+	</ConfigUI>
 		<States>
 			<State id="status">
 				<ValueType>String</ValueType>
