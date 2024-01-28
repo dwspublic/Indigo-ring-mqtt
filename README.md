@@ -20,4 +20,3 @@ Install the plugin as usual.  And then go ahead and create your ring devices in 
 Create a trigger using the plugin Menu command.  This is only done once.
 
 Currently the plugin supports Cameras, Doorbells, Chimes and Lighting.   It exposes them in Indigo as Cameras, Motion, Lights, Doorbells, Sirens and Chimes.  I will be adding ring alarm devices in the future.  Each ring device translates into one or more Indigo devices.  For example, a ring camera could have an Indigo Camera device, Indigo Motion device, Indigo Light device and Indigo Siren device.  Battery Level (single and dual) is also supported.
-
