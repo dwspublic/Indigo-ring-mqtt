@@ -31,7 +31,6 @@ class Plugin(indigo.PluginBase):
         self.indigo_log_handler.setLevel(self.logLevel)
         self.logger.debug(f"logLevel = {self.logLevel}")
         self.brokerID = pluginPrefs.get("brokerID", "")
-        self.snapshotImagePath = pluginPrefs.get("snapshotImagePath", "")
 
         self.ringmqtt_devices = []
         self.ring_devices = eval(pluginPrefs.get("ring_devices", "{}"))
@@ -245,7 +244,7 @@ class Plugin(indigo.PluginBase):
         if topic_parts[4] == "snapshot" and topic_parts[5] == "image" and device.deviceTypeId == "RingCamera":
             #self.logger.warning("About to process camera snapshot image message")
             if self.pluginPrefs.get("storeSnapShots", False):
-                if self.snapshotImagePath == "":
+                if self.pluginPrefs.get("snapshotImagePath", "") == "":
                     tpath = indigo.server.getInstallFolderPath() + '/Web Assets/public/ring/'
                     device.updateStateOnServer(key="snapshot_image", value="http://localhost:8176/public/ring/" + device.address + ".jpg")
                 else:
