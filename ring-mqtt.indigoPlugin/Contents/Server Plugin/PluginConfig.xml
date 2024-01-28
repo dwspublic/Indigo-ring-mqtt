@@ -22,23 +22,35 @@
     <Field id="batterystateUI" type="checkbox" defaultValue="false">
         <Label>Display higher battery percentage</Label>
     </Field>
-    <Field id="startupHADiscovery" type="checkbox" defaultValue="false">
+    <Field id="batteryNote" type="label" fontSize="small" fontColor="darkgray">
+        <Label>For devices with two batteries, UI will display higher of the two, other battery is in a device state</Label>
+    </Field>
+     <Field id="startupHADiscovery" type="checkbox" defaultValue="false">
         <Label>On Plugin Startup - initiate HA Discovery</Label>
     </Field>
-    <Field id="ringCommAlertHours" type="menu" defaultValue="06">
-        <Label>Log Event when Ring Device hasn't been updated in (hours):</Label>
+    <Field id="HADNote" type="label" fontSize="small" fontColor="darkgray">
+        <Label>HA Discovery asks ring-mqtt to bulk send state messages for all ring devices.  Indigo-ring-mqtt uses these messages to populate the device cache and active indigo device states.</Label>
+    </Field>
+    <Field id="ringCommAlertHours" type="menu" defaultValue="12">
+        <Label>Log Communication Errors after:</Label>
         <List>
-            <Option value="01">One Hour</Option>
             <Option value="03">Three Hours</Option>
             <Option value="06">Six Hours</Option>
             <Option value="12">Twelve Hours</Option>
+            <Option value="24">Twenty-Four Hours</Option>
             <Option value="999999999">Never</Option>
         </List>
+    </Field>
+    <Field id="CommAlert" type="label" fontSize="small" fontColor="darkgray">
+        <Label>Generate a log message if a ring device hasn't had any messages from ring-mqtt in XX hours.</Label>
     </Field>
     <Field id="storeSnapShots" type="checkbox" defaultValue="false">
         <Label>Store Camera Snapshots:</Label>
     </Field>
     <Field id="snapshotImagePath" type="textfield" defaultValue="">
-        <Label>Path for storing Snapshot Images (leave blank for Indigo Webserver):</Label>
+        <Label>Snapshot Path:</Label>
     </Field>
-</PluginConfig>
+    <Field id="SnapshotNote" type="label" fontSize="small" fontColor="darkgray">
+        <Label>You can choose to store snapshots on the indigo server and indicate where to store them.  Leave the path blank for indigo webserver (.../Web Assets/public/ring).</Label>
+    </Field>
+ </PluginConfig>

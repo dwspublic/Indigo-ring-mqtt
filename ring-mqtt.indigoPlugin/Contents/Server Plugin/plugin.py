@@ -104,7 +104,7 @@ class Plugin(indigo.PluginBase):
             message_data = self.mqttPlugin.executeAction("fetchQueuedMessage", deviceId=brokerID, props=props, waitUntilDone=True)
             if message_data is None:
                 break
-            self.logger.debug(f"processMessage: {message_data}")
+            self.logger.threaddebug(f"processMessage: {message_data}")
 
             topic_parts = message_data["topic_parts"]
             payload = base64.b64decode(message_data['payload'])
@@ -162,7 +162,7 @@ class Plugin(indigo.PluginBase):
                 device.replacePluginPropsOnServer(newProps)
 
     def processHADMessage(self, topic_parts, payload):
-        self.logger.debug(f"processHADMessage: {topic_parts}:{payload}")
+        self.logger.debug(f"processHADMessage: {'/'.join(topic_parts)}:{payload}")
 
         if topic_parts[1] == "binary_sensor":
             if "_motion" in topic_parts[3]:
@@ -205,7 +205,7 @@ class Plugin(indigo.PluginBase):
                 self.ring_devices[topic_parts[2] + "-L-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingLight"]
                 return
     def processCMessage(self, device, topic_parts, payload, payloadimage):
-        self.logger.debug(f"processCMessage: {topic_parts}:{payload} - Device:{device.name}")
+        self.logger.debug(f"processCMessage: {'/'.join(topic_parts)}:{payload} - Device:{device.name}")
 
         if topic_parts[4] == "status":
             device.updateStateOnServer(key="status", value=payload)
@@ -242,7 +242,7 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="motion_duration", value=payload)
 
         if topic_parts[4] == "snapshot" and topic_parts[5] == "image" and device.deviceTypeId == "RingCamera":
-            #self.logger.warning("About to process camera snapshot image message")
+            self.logger.debug(f"processCMessage: Image Binary {'/'.join(topic_parts)}:{payload} - Device:{device.name}")
             if self.pluginPrefs.get("storeSnapShots", False):
                 if self.pluginPrefs.get("snapshotImagePath", "") == "":
                     tpath = indigo.server.getInstallFolderPath() + '/Web Assets/public/ring/'
@@ -256,21 +256,21 @@ class Plugin(indigo.PluginBase):
                     test_file.close()
 
         if topic_parts[4] == "snapshot" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
-            #self.logger.warning("About to process camera snapshot attributes message")
+            self.logger.debug(f"processCMessage: Image Attributes {'/'.join(topic_parts)}:{payload} - Device:{device.name}")
             p = json.loads(payload)
             device.updateStateOnServer(key="snapshot_timestamp", value=str(datetime.datetime.fromtimestamp(p["timestamp"])))
             device.updateStateOnServer(key="snapshot_type", value=p["type"])
 
         if topic_parts[4] == "snapshot_mode" and topic_parts[5] == "state" and device.deviceTypeId == "RingCamera":
             if device.pluginProps["snapshot_mode"] != payload:
-                self.logger.warning(f'Snapshot Mode different for device {device.name} : PluginProps: {device.pluginProps["snapshot_mode"]}  Payload: {payload}')
+                self.logger.debug(f'processCMessage: Snapshot Mode different for device {device.name} : PluginProps: {device.pluginProps["snapshot_mode"]}  Payload: {payload}')
                 newProps = device.pluginProps
                 newProps["snapshot_mode"] = payload
                 device.replacePluginPropsOnServer(newProps)
 
         if topic_parts[4] == "snapshot_interval" and topic_parts[5] == "state" and device.deviceTypeId == "RingCamera":
             if device.pluginProps["snapshot_interval"] != payload:
-                self.logger.warning(f'Snapshot Interval different for device {device.name} : PluginProps: {device.pluginProps["snapshot_interval"]}  Payload: {payload}')
+                self.logger.debug(f'processCMessage: Snapshot Interval different for device {device.name} : PluginProps: {device.pluginProps["snapshot_interval"]}  Payload: {payload}')
                 newProps = device.pluginProps
                 newProps["snapshot_interval"] = payload
                 device.replacePluginPropsOnServer(newProps)
@@ -310,7 +310,7 @@ class Plugin(indigo.PluginBase):
                 device.updateStateOnServer(key="onOffState", value=False)
 
     def processBMessage(self, device, topic_parts, payload):
-        self.logger.debug(f"processBMessage: {topic_parts}:{payload}")
+        self.logger.debug(f"processBMessage: {'/'.join(topic_parts)}:{payload}")
 
         if topic_parts[4] == "battery" and topic_parts[5] == "attributes":
             p = json.loads(payload)
@@ -328,7 +328,7 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="batteryLevel2", value=b2)
 
     def processLMessage(self, device, topic_parts, payload):
-        self.logger.debug(f"processLMessage: {topic_parts}:{payload} - Device:{device.name}")
+        self.logger.debug(f"processLMessage: {'/'.join(topic_parts)}:{payload} - Device:{device.name}")
 
         if topic_parts[4] == "status":
             device.updateStateOnServer(key="status", value=payload)
@@ -354,7 +354,7 @@ class Plugin(indigo.PluginBase):
                 device.updateStateOnServer(key="onOffState", value=False)
 
     def processZMessage(self, device, topic_parts, payload):
-        self.logger.debug(f"processZMessage: {topic_parts}:{payload} - Device:{device.name}")
+        self.logger.debug(f"processZMessage: {'/'.join(topic_parts)}:{payload} - Device:{device.name}")
 
         if topic_parts[4] == "status":
             device.updateStateOnServer(key="status", value=payload)
@@ -407,7 +407,7 @@ class Plugin(indigo.PluginBase):
         #d4 = datetime.datetime.strptime(d3, '%Y-%m-%d %H:%M:%S')
         d4 = datetime.datetime.strftime(d2, '%Y-%m-%d %H:%M:%S')
         d5 = datetime.datetime.strptime(d4, '%Y-%m-%d %H:%M:%S')
-        #self.logger.info(f"Duration from now {self.getDuration(d4)}")
+        self.logger.debug(f"convertZeroDate - Input: {zeroDate} - Output {d5}")
         return d5
 
     def selectionChanged(self, valuesDict, typeId, devId):
@@ -428,6 +428,11 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(u"\tSelectionChanged valuesDict to be returned:\n%s" % (str(valuesDict)))
         return valuesDict
 
+    def didDeviceCommPropertyChange(self, origDev, newDev):
+        if origDev.address != newDev.address:
+            return True
+        return False
+
     def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
         if not userCancelled:
             device = indigo.devices[devId]
@@ -440,21 +445,21 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"{devName}: publishSnapshotProps")
         if newsnapshotMode != "" and origsnapshotMode != newsnapshotMode:
             payload = newsnapshotMode
-            self.logger.warning(f'Snapshot Mode Publish for device {devName} : Payload: {payload}')
+            self.logger.debug(f'publishSnapshotProps: Snapshot Mode Publish for device {devName} : Payload: {payload}')
             self.publish_topic(brokerID, devName,f"ring/{self.ring_devices[devAddress][4]}/{topicType}/{self.ring_devices[devAddress][3]}/snapshot_mode/command", payload)
         elif newsnapshotInterval != "" and origsnapshotInterval != newsnapshotInterval:
             payload = newsnapshotInterval
-            self.logger.warning(f'Snapshot Interval Publish for device {devName} : Payload: {payload}')
+            self.logger.debug(f'publishSnapshotProps: Snapshot Interval Publish for device {devName} : Payload: {payload}')
             self.publish_topic(brokerID, devName,f"ring/{self.ring_devices[devAddress][4]}/{topicType}/{self.ring_devices[devAddress][3]}/snapshot_interval/command", payload)
 
     def generate_HAD_messages(self, valuesDict, typeId):
-        self.logger.debug(f"Clear Device Cache and rebuild")
+        self.logger.debug(f"generate_HAD_messages: Clear Device Cache, start HA Discovery and rebuild cache")
 
         self.ring_devices = {}
         self.ring_battery_devices = {}
         brokerID = int(self.brokerID)
         self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
-        self.logger.info(f"Sent haas/status - online - devices should be updated shortly")
+        self.logger.info(f"Sent topic: haas/status, payload: online - devices should be updated shortly")
 
         return True
 
@@ -516,6 +521,8 @@ class Plugin(indigo.PluginBase):
     ########################################
 
     def actionControlDevice(self, action, device):
+
+        self.logger.debug(f"actionControlDevice: Action: {action.deviceAction} Device: {device.name}")
 
         brokerID = int(self.brokerID)
 
