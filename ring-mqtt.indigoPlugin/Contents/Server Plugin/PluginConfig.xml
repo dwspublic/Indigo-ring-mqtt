@@ -25,7 +25,7 @@
     <Field id="batteryNote" type="label" fontSize="small" fontColor="darkgray">
         <Label>For devices with two batteries, UI will display higher of the two, other battery is in a device state</Label>
     </Field>
-     <Field id="startupHADiscovery" type="checkbox" defaultValue="false">
+     <Field id="startupHADiscovery" type="checkbox" defaultValue="true">
         <Label>On Plugin Startup - initiate HA Discovery</Label>
     </Field>
     <Field id="HADNote" type="label" fontSize="small" fontColor="darkgray">

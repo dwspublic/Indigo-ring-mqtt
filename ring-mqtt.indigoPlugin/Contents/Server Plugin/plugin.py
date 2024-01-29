@@ -47,10 +47,11 @@ class Plugin(indigo.PluginBase):
     def startup(self):
         self.logger.info("Starting ringmqtt")
         indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
-        if self.pluginPrefs.get("startupHADiscovery", False):
+        if self.brokerID == "0" or self.brokerID == "":
+            self.logger.error("The MQTT Broker (brokerID) must be set for plugin to be functional!")
+        elif self.pluginPrefs.get("startupHADiscovery", False):
             brokerID = int(self.brokerID)
-            if brokerID != 0:
-                self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
+            self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
 
     def shutdown(self):
         self.logger.info("Stopping ringmqtt")
@@ -514,6 +515,10 @@ class Plugin(indigo.PluginBase):
                 self.logger.error(f"Error calling indigo.pluginEvent.create(): {e}")
             else:
                 self.logger.info(f"Created HA trigger '{name} for message type '{RINGMQTT_MESSAGE_TYPE}'")
+                brokerID = int(self.brokerID)
+                if brokerID != 0:
+                    self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
+                    self.logger.info(f"Generated initial HA Discovery")
 
         return True
 
@@ -585,7 +590,10 @@ class Plugin(indigo.PluginBase):
         if not userCancelled:
             self.logLevel = int(valuesDict.get("logLevel", logging.INFO))
             self.indigo_log_handler.setLevel(self.logLevel)
-            self.brokerID = int(valuesDict.get("brokerID"))
+            if valuesDict.get("brokerID") != "":
+                self.brokerID = valuesDict.get("brokerID")
+        if self.brokerID == "0" or self.brokerID == "":
+            self.logger.error("The MQTT Broker (brokerID) must be set for plugin to be functional!")
 
     def getDuration(self, then, now=datetime.datetime.now(), interval="hours"):
 
