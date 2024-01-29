@@ -15,7 +15,7 @@ ring topic ("ring/#") as well as the homeassistant topic ("homeassistant/#).
 Install the ring-mqtt docker container and configure it to connect to your MQTT broker. Set the
 MQTT topic prefix to "ring/"
 
-Install the plugin as usual.  And then go ahead and create your ring devices in Indigo.  You can pick the associated ring device from the dropdown list.
+Install the plugin as usual.  In the initial configuration, you must select the broker client created above.  And then go ahead and create your ring devices in Indigo.  You can pick the associated ring device from the dropdown list.
 
 Create a trigger using the plugin Menu command.  This is only done once.
 

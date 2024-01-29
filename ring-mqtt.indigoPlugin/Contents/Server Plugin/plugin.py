@@ -30,7 +30,7 @@ class Plugin(indigo.PluginBase):
         self.logLevel = int(self.pluginPrefs.get("logLevel", logging.INFO))
         self.indigo_log_handler.setLevel(self.logLevel)
         self.logger.debug(f"logLevel = {self.logLevel}")
-        self.brokerID = pluginPrefs.get("brokerID", "")
+        self.brokerID = pluginPrefs.get("brokerID", "0")
 
         self.ringmqtt_devices = []
         self.ring_devices = eval(pluginPrefs.get("ring_devices", "{}"))
@@ -49,7 +49,8 @@ class Plugin(indigo.PluginBase):
         indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
         if self.pluginPrefs.get("startupHADiscovery", False):
             brokerID = int(self.brokerID)
-            self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
+            if brokerID != 0:
+                self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
 
     def shutdown(self):
         self.logger.info("Stopping ringmqtt")
@@ -57,7 +58,7 @@ class Plugin(indigo.PluginBase):
         self.pluginPrefs["ring_battery_devices"] = str(self.ring_battery_devices)
 
     def message_handler(self, notification):
-        self.logger.debug(f"message_handler: MQTT message {notification['message_type']} from {indigo.devices[int(self.brokerID)].name}")
+        self.logger.debug(f"message_handler: MQTT message {notification['message_type']} from brokerId: {self.brokerID}")
         self.processMessage(notification)
 
     def deviceStartComm(self, device):
@@ -584,6 +585,7 @@ class Plugin(indigo.PluginBase):
         if not userCancelled:
             self.logLevel = int(valuesDict.get("logLevel", logging.INFO))
             self.indigo_log_handler.setLevel(self.logLevel)
+            self.brokerID = int(valuesDict.get("brokerID"))
 
     def getDuration(self, then, now=datetime.datetime.now(), interval="hours"):
 
