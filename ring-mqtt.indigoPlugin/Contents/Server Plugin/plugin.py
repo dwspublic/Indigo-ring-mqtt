@@ -40,15 +40,16 @@ class Plugin(indigo.PluginBase):
         if not self.mqttPlugin.isEnabled():
             self.logger.warning("MQTT Connector plugin not enabled!")
 
-        if old_version := self.pluginPrefs.get("version", "0.0.0") != self.pluginVersion:
-            self.logger.debug(f"Upgrading plugin from version {old_version} to {self.pluginVersion}")
+        self.old_version = self.pluginPrefs.get("version", "0.0.0")
+        if self.old_version != self.pluginVersion:
+            self.logger.debug(f"Upgrading plugin from version {self.old_version} to {self.pluginVersion}")
             self.pluginPrefs["version"] = self.pluginVersion
 
     def startup(self):
         self.logger.info("Starting ringmqtt")
         indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
-        if self.brokerID == "0" or self.brokerID == "":
-            self.logger.error("The MQTT Broker (brokerID) must be set for plugin to be functional!")
+        if (self.brokerID == "0" or self.brokerID == "") and self.old_version != "0.0.0":
+            self.logger.error(f'startup - The MQTT Broker (brokerID) must be set for plugin to be functional! {self.brokerID} : {self.pluginPrefs.get("brokerID", "0")}')
         elif self.pluginPrefs.get("startupHADiscovery", False):
             brokerID = int(self.brokerID)
             self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
@@ -593,7 +594,7 @@ class Plugin(indigo.PluginBase):
             if valuesDict.get("brokerID") != "":
                 self.brokerID = valuesDict.get("brokerID")
         if self.brokerID == "0" or self.brokerID == "":
-            self.logger.error("The MQTT Broker (brokerID) must be set for plugin to be functional!")
+            self.logger.error(f'closedPrefsConfigUi - The MQTT Broker (brokerID) must be set for plugin to be functional! {self.brokerID} : {self.pluginPrefs.get("brokerID", "0")}')
 
     def getDuration(self, then, now=datetime.datetime.now(), interval="hours"):
 
