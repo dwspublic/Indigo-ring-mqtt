@@ -2,7 +2,7 @@
 
 Plugin for the Indigo Home Automation system to communicate with ring devices via MQTT.
 
-The plugin requires the ring-mqtt project (https://github.com/tsightler/ring-mqtt) to be running on your network.  The preferred method is in a docker container.  The ring-mqtt project is straightforward to install and configure to talk with the ring API. It uses MQTT to publish messages for Indigo-ring-mqtt to subscribe to.  Testing has been done with latest version of ring-mqtt (v5.6.3).
+The plugin requires the ring-mqtt project (https://github.com/tsightler/ring-mqtt) to be running on your network.  The preferred method is in a docker container.  The ring-mqtt project is straightforward to install and configure to talk through the ring API with your ring credentials. It uses MQTT to publish messages for Indigo-ring-mqtt to subscribe to.  Testing has been done with latest version of ring-mqtt (v5.6.3).
 
 The plugin also requires the Indigo MQTT Connector plugin (https://www.indigodomo.com/pluginstore/211/) and an MQTT Broker (such as https://www.indigodomo.com/pluginstore/260/).
 
