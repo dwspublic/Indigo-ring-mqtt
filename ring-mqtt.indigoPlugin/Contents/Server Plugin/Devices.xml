@@ -1,6 +1,118 @@
 <?xml version="1.0"?>
 <Devices>
 	<SupportURL>http://forums.indigodomo.com/</SupportURL>
+	<Device type="custom" id="MQTTConnector">
+		<Name>MQTT Connector</Name>
+		<ConfigUI>
+            <Field id="subscriptions" type="list" hidden="true"><List class="self" method="subscribedList"/></Field>
+            <Field id="old_subscriptions" type="list" hidden="true"><List class="self" method="subscribedList"/></Field>
+            <Field id="section" type="menu" defaultValue="connect">
+                <Label>Section:</Label>
+        		<List>
+        			<Option value="connect">Connection Info</Option>
+        			<Option value="subscriptions">Topic Subscriptions</Option>
+        		</List>
+        	</Field>
+            <Field id="section_separator1" type="separator"/>
+			<Field id="address" type="textfield"  defaultValue="localhost" visibleBindingId="section" visibleBindingValue="connect">
+                <Label>IP Address or Hostname:</Label>
+            </Field>
+            <Field id="port" type="textfield" defaultValue="1883" visibleBindingId="section" visibleBindingValue="connect">
+                <Label>Port:</Label>
+            </Field>
+            <Field id="protocol" type="menu" defaultValue="4"  visibleBindingId="section" visibleBindingValue="connect">
+        		<Label>MQTT Protocol:</Label>
+        		<List>
+        			<Option value="4">MQTTv311</Option>
+        			<Option value="3">MQTTv31</Option>
+        		</List>
+        	</Field>
+            <Field id="transport" type="menu" defaultValue="tcp"  visibleBindingId="section" visibleBindingValue="connect">
+        		<Label>Transport Protocol:</Label>
+        		<List>
+        			<Option value="tcp">TCP</Option>
+        			<Option value="websockets">WebSockets</Option>
+        		</List>
+        	</Field>
+            <Field id="username" type="textfield"  visibleBindingId="section" visibleBindingValue="connect">
+                <Label>Username:</Label>
+            </Field>
+            <Field id="password" type="textfield" secure="true" visibleBindingId="section" visibleBindingValue="connect">
+                <Label>Password:</Label>
+            </Field>
+            <Field id="useTLS" type="checkbox" visibleBindingId="section" visibleBindingValue="connect">
+                <Label>Use SSL/TLS:</Label>
+            </Field>
+
+            <Field id="certFile" type="textfield" visibleBindingId="section" visibleBindingValue="connect">
+                <Label>Certificate File Path (blank for default):</Label>
+            </Field>
+            <Field id="certFileLabel" type="label" fontColor="darkgray" visibleBindingId="section" visibleBindingValue="connect">
+                <Label>Non-absolute path (no leading slash) is relative to the Indigo install directory.</Label>
+            </Field>
+           <Field id="delay" type="textfield" defaultValue="0" visibleBindingId="section" visibleBindingValue="connect">
+                <Label>Delay:</Label>
+            </Field>
+            <Field id="delay_note" type="label" fontColor="darkgray" visibleBindingId="section" visibleBindingValue="connect">
+                <Label>Delay starting this device.  Generally only used when this is an MQTT Broker device.</Label>
+            </Field>
+            <!--  This section for managing topic subscriptions for this broker  -->
+
+            <Field id="subscriptions_newTopic" type="textfield" visibleBindingId="section" visibleBindingValue="subscriptions" >
+                <Label>Topic to subscribe:</Label>
+            </Field>
+        	<Field id="subscriptions_qos" type="menu" defaultValue="0" visibleBindingId="section" visibleBindingValue="subscriptions">
+        		<Label>QoS Level:</Label>
+        		<List>
+        			<Option value="0">0</Option>
+        			<Option value="1">1</Option>
+        			<Option value="2">2</Option>
+        		</List>
+        	</Field>
+            <Field id="subscriptions_addTopic" type="button" visibleBindingId="section" visibleBindingValue="subscriptions">
+                <Label/>
+                <Title>Add Topic</Title>
+                <CallbackMethod>addTopic</CallbackMethod>
+            </Field>
+            <Field id="subscriptions_separator1" type="separator" visibleBindingId="section" visibleBindingValue="subscriptions"/>
+            <Field id="subscriptions_subscribedLabel" type="label" fontColor="darkgray" visibleBindingId="section" visibleBindingValue="subscriptions">
+                <Label>This is the list of topics currently subscribed to for this broker.</Label>
+            </Field>
+           <Field id="subscriptions_items" type="list" rows="10" visibleBindingId="section" visibleBindingValue="subscriptions">
+                <Label>Subscribed Topics:</Label>
+                <List class="self" method="subscribedList" dynamicReload="true"/>
+            </Field>
+            <Field id="subscriptions_deleteSubscriptions" type="button" visibleBindingId="section" visibleBindingValue="subscriptions">
+                <Label/>
+                <Title>Delete Subscriptions</Title>
+                <CallbackMethod>deleteSubscriptions</CallbackMethod>
+            </Field>
+		</ConfigUI>
+		<States>
+			<State id="status">
+				<ValueType>String</ValueType>
+				<TriggerLabel>status</TriggerLabel>
+				<ControlPageLabel>status</ControlPageLabel>
+			</State>
+		</States>
+		<UiDisplayStateId>status</UiDisplayStateId>
+	</Device>
+	<Device type="custom" id="APIConnector">
+		<Name>API Connector</Name>
+		<ConfigUI>
+			<Field type="textfield" id="ringtoken" tooltip="Ring Token">
+				<Label>Ring Token:</Label>
+			</Field>
+		</ConfigUI>
+		<States>
+			<State id="status">
+				<ValueType>String</ValueType>
+				<TriggerLabel>status</TriggerLabel>
+				<ControlPageLabel>status</ControlPageLabel>
+			</State>
+		</States>
+		<UiDisplayStateId>status</UiDisplayStateId>
+	</Device>
 	<Device type="sensor" subType="kSensorDeviceSubType.Motion" id="RingMotion">
 		<Name>Ring Motion</Name>
 		<ConfigUI>
@@ -27,6 +139,9 @@
 			</Field>
 			<Field type="textfield" id="model" readonly="true">
 				<Label>Model:</Label>
+			</Field>
+			<Field type="textfield" id="apitype" readonly="true">
+				<Label>API Type (mqtt, pyapi):</Label>
 			</Field>
 		</ConfigUI>
 		<States>
@@ -104,6 +219,9 @@
 			<Field type="textfield" id="model" readonly="true">
 				<Label>Model:</Label>
 			</Field>
+			<Field type="textfield" id="apitype" readonly="true">
+				<Label>API Type (mqtt, pyapi):</Label>
+			</Field>
 		</ConfigUI>
 		<States>
 			<State id="status">
@@ -170,6 +288,9 @@
 			<Field type="textfield" id="model" readonly="true">
 				<Label>Model:</Label>
 			</Field>
+			<Field type="textfield" id="apitype" readonly="true">
+				<Label>API Type (mqtt, pyapi):</Label>
+			</Field>
        	    <Field type="menu" id="snapshot_mode" defaultValue="Auto">
         		<Label>Snapshot Mode:</Label>
         		<List>
@@ -184,7 +305,7 @@
 			<Field type="textfield" id="snapshot_interval" readonly="false" defaultValue="3600">
 				<Label>Snapshot Interval (seconds):</Label>
 			</Field>
-	</ConfigUI>
+		</ConfigUI>
 		<States>
 			<State id="status">
 				<ValueType>String</ValueType>
@@ -296,6 +417,9 @@
 			<Field type="textfield" id="model" readonly="true">
 				<Label>Model:</Label>
 			</Field>
+			<Field type="textfield" id="apitype" readonly="true">
+				<Label>API Type (mqtt, pyapi):</Label>
+			</Field>
 		</ConfigUI>
 		<States>
 			<State id="status">
@@ -361,6 +485,9 @@
 			</Field>
 			<Field type="textfield" id="model" readonly="true">
 				<Label>Model:</Label>
+			</Field>
+			<Field type="textfield" id="apitype" readonly="true">
+				<Label>API Type (mqtt, pyapi):</Label>
 			</Field>
 		</ConfigUI>
 		<States>
@@ -447,6 +574,9 @@
 			</Field>
 			<Field type="textfield" id="model" readonly="true">
 				<Label>Model:</Label>
+			</Field>
+			<Field type="textfield" id="apitype" readonly="true">
+				<Label>API Type (mqtt, pyapi):</Label>
 			</Field>
 		</ConfigUI>
 		<States>

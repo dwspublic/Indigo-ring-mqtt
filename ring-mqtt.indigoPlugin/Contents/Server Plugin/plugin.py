@@ -12,6 +12,17 @@ try:
 except ImportError:
     pass
 
+from pathlib import Path
+
+import asyncio
+import traceback
+
+import threading
+
+from ring_doorbell import Auth, AuthenticationError, Requires2FAError, Ring, RingEvent
+from ring_doorbell.const import CLI_TOKEN_FILE, PACKAGE_NAME, USER_AGENT
+from ring_doorbell.listen import can_listen
+
 RINGMQTT_MESSAGE_TYPE = "##ring##"
 kCurDevVersCount = 0  # current version of plugin devices
 
@@ -32,7 +43,12 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"logLevel = {self.logLevel}")
         self.brokerID = pluginPrefs.get("brokerID", "0")
 
+        self._event_loop = None
+        self._async_thread = None
+        self.credentials = pluginPrefs.get("credentials", "")
+
         self.ringmqtt_devices = []
+        self.ringpyapi_devices = []
         self.ring_devices = eval(pluginPrefs.get("ring_devices", "{}"))
         self.ring_battery_devices = eval(pluginPrefs.get("ring_battery_devices", "{}"))
 
@@ -45,28 +61,60 @@ class Plugin(indigo.PluginBase):
             self.logger.debug(f"Upgrading plugin from version {self.old_version} to {self.pluginVersion}")
             self.pluginPrefs["version"] = self.pluginVersion
 
+
     def startup(self):
         self.logger.info("Starting ringmqtt")
-        indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
-        if (self.brokerID == "0" or self.brokerID == "") and self.old_version != "0.0.0":
-            self.logger.error(f'startup - The MQTT Broker (brokerID) must be set for plugin to be functional! {self.brokerID} : {self.pluginPrefs.get("brokerID", "0")}')
-        elif self.pluginPrefs.get("startupHADiscovery", False):
-            brokerID = int(self.brokerID)
-            self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
+        self._event_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._event_loop)
+        self._async_thread = threading.Thread(target=self._run_async_thread)
+        self._async_thread.start()
+
 
     def shutdown(self):
         self.logger.info("Stopping ringmqtt")
         self.pluginPrefs["ring_devices"] = str(self.ring_devices)
         self.pluginPrefs["ring_battery_devices"] = str(self.ring_battery_devices)
+        self.pluginPrefs["credentials"] = self.credentials
 
+    def runConcurrentThread(self):
+        try:
+            while True:
+                self.pyapiUpdateDevices()
+                self.sleep(60)  # in seconds
+        except self.StopThread:
+            # do any cleanup here
+            pass
     def message_handler(self, notification):
         self.logger.debug(f"message_handler: MQTT message {notification['message_type']} from brokerId: {self.brokerID}")
         self.processMessage(notification)
 
     def deviceStartComm(self, device):
         self.logger.info(f"{device.name}: Starting Device")
-        if device.id not in self.ringmqtt_devices:
+        if device.deviceTypeId == "APIConnector":
+            self.cache_file = Path("/Users/darrylscott/PycharmProjects/Indigo-ring-test/ring_token.cache")
+            if self.cache_file.is_file():
+                auth = Auth("YourProject/1.0", json.loads(self.cache_file.read_text()), self.token_updated)
+                self.ring = Ring(auth)
+                self.pyapi = False
+                self.pyapilisten = True
+            else:
+                self.pyapi = False
+                self.pyapilisten = False
+            self._event_loop.create_task(self._async_start())
+            self.pyapiDeviceCache()
+            return
+        if device.deviceTypeId == "MQTTConnector":
+            indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
+            if (self.brokerID == "0" or self.brokerID == "") and self.old_version != "0.0.0":
+                self.logger.error(f'startup - The MQTT Broker (brokerID) must be set for plugin to be functional! {self.brokerID} : {self.pluginPrefs.get("brokerID", "0")}')
+            elif self.pluginPrefs.get("startupHADiscovery", False):
+                brokerID = int(self.brokerID)
+                self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
+            return
+        if device.id not in self.ringmqtt_devices and device.pluginProps["apitype"] == "mqtt":
             self.ringmqtt_devices.append(device.id)
+        if device.id not in self.ringpyapi_devices and device.pluginProps["apitype"] == "pyapi":
+            self.ringpyapi_devices.append(device.id)
         if device.deviceTypeId == "RingLight":
             device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
         elif device.deviceTypeId == "RingCamera":
@@ -91,9 +139,60 @@ class Plugin(indigo.PluginBase):
 
     def deviceStopComm(self, device):
         self.logger.info(f"{device.name}: Stopping Device")
+        if device.deviceTypeId == "APIConnector":
+            return
+        if device.deviceTypeId == "MQTTConnector":
+            return
         if device.id in self.ringmqtt_devices:
             self.ringmqtt_devices.remove(device.id)
             self.deviceRingCacheCheck(device.id)
+
+    def token_updated(self, token):
+        self.cache_file.write_text(json.dumps(token))
+
+    def pyapiDeviceCache(self):
+        self.logger.debug(f"pyapiDeviceCache: Retrieve Ring devices through api and update cache")
+
+        if self.pyapi:
+            self.ring.update_data()
+            devices = self.ring.devices()
+
+            for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots']):
+                dev.update_health_data()
+
+                if hasattr(dev, 'motion_detection'):
+                    self.ring_devices[dev._attrs["location_id"] + "-MA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingMotion", "pyapi"]
+                if hasattr(dev, 'siren'):
+                    self.ring_devices[dev._attrs["location_id"] + "-SA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingSiren", "pyapi"]
+                if hasattr(dev, 'lights'):
+                    self.ring_devices[dev._attrs["location_id"] + "-LA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingLight", "pyapi"]
+                if dev.family == "chimes":
+                    self.ring_devices[dev._attrs["location_id"] + "-ZA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingZChime", "pyapi"]
+                if dev.family == "stickup_cams":
+                    self.ring_devices[dev._attrs["location_id"] + "-CA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingCamera", "pyapi"]
+                if dev.family == "doorbots":
+                    self.ring_devices[dev._attrs["location_id"] + "-DA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingCamera", "pyapi"]
+                if dev.has_capability("battery"):
+                    self.ring_battery_devices[dev._attrs["location_id"] + "-A-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "Battery", "pyapi"]
+
+    def pyapiUpdateDevices(self):
+        self.logger.debug(f"pyapiUpdateDevices: Retrieve Ring devices through api and update indigo device states")
+
+        if self.pyapi:
+            self.ring.update_data()
+            devices = self.ring.devices()
+
+            for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots']):
+                dev.update_health_data()
+
+                for deviceid in self.ringpyapi_devices:
+                    device = indigo.devices[deviceid]
+
+                    if self.ring_devices[device.address][4] == dev._attrs["location_id"] and self.ring_devices[device.address][3] == dev.device_id:
+                        if hasattr(dev, "connection_status"):
+                            device.updateStateOnServer(key="status", value=dev.connection_status)
+                        if hasattr(dev, "firmware"):
+                            device.updateStateOnServer(key="firmwareStatus", value=dev.firmware)
 
     def processMessage(self, notification):
 
@@ -171,41 +270,41 @@ class Plugin(indigo.PluginBase):
             if "_motion" in topic_parts[3]:
                 p = json.loads(payload)
                 q = p["device"]
-                self.ring_devices[topic_parts[2] + "-M-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingMotion"]
+                self.ring_devices[topic_parts[2] + "-M-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingMotion", "mqtt"]
                 return
             if "_ding" in topic_parts[3]:
                 p = json.loads(payload)
                 q = p["device"]
-                self.ring_devices[topic_parts[2] + "-D-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingDoorbell"]
+                self.ring_devices[topic_parts[2] + "-D-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingDoorbell", "mqtt"]
                 return
         if topic_parts[1] == "sensor":
             if "_battery" in topic_parts[3]:
                 p = json.loads(payload)
                 q = p["device"]
-                self.ring_battery_devices[topic_parts[2] + "-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "Battery"]
+                self.ring_battery_devices[topic_parts[2] + "-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "Battery", "mqtt"]
                 return
         if topic_parts[1] == "camera":
             if "_snapshot" in topic_parts[3]:
                 p = json.loads(payload)
                 q = p["device"]
-                self.ring_devices[topic_parts[2] + "-C-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0],topic_parts[2], "RingCamera"]
+                self.ring_devices[topic_parts[2] + "-C-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0],topic_parts[2], "RingCamera", "mqtt"]
                 return
         if topic_parts[1] == "switch":
             if "_siren" in topic_parts[3]:
                 p = json.loads(payload)
                 q = p["device"]
-                self.ring_devices[topic_parts[2] + "-S-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingSiren"]
+                self.ring_devices[topic_parts[2] + "-S-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingSiren", "mqtt"]
                 return
             if "_snooze" in topic_parts[3]:
                 p = json.loads(payload)
                 q = p["device"]
-                self.ring_devices[topic_parts[2] + "-Z-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingZChime"]
+                self.ring_devices[topic_parts[2] + "-Z-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingZChime", "mqtt"]
                 return
         if topic_parts[1] == "light":
             if "_light" in topic_parts[3]:
                 p = json.loads(payload)
                 q = p["device"]
-                self.ring_devices[topic_parts[2] + "-L-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingLight"]
+                self.ring_devices[topic_parts[2] + "-L-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingLight", "mqtt"]
                 return
     def processCMessage(self, device, topic_parts, payload, payloadimage):
         self.logger.debug(f"processCMessage: {'/'.join(topic_parts)}:{payload} - Device:{device.name}")
@@ -396,7 +495,7 @@ class Plugin(indigo.PluginBase):
         retList = []
         for aID in self.ring_devices:
             if self.ring_devices[aID][5] == typeId:
-                retList.append((aID, self.ring_devices[aID][0] + " (" + self.ring_devices[aID][1] + " - " + self.ring_devices[aID][2] + ")"))
+                retList.append((aID, self.ring_devices[aID][0] + " (" + self.ring_devices[aID][1] + " - " + self.ring_devices[aID][2] + " - " + self.ring_devices[aID][6] + ")"))
         retList.sort(key=lambda tup: tup[1])
         return retList
 
@@ -422,6 +521,7 @@ class Plugin(indigo.PluginBase):
             valuesDict["name"] = self.ring_devices[valuesDict["doorbell"]][0]
             valuesDict["manufacturer"] = self.ring_devices[valuesDict["doorbell"]][1]
             valuesDict["model"] = self.ring_devices[valuesDict["doorbell"]][2]
+            valuesDict["apitype"] = self.ring_devices[valuesDict["doorbell"]][6]
             p = self.ring_devices[valuesDict["doorbellId"]][4] + "-" + self.ring_devices[valuesDict["doorbellId"]][3]
             if p in self.ring_battery_devices:
                 valuesDict["SupportsBatteryLevel"] = True
@@ -463,6 +563,7 @@ class Plugin(indigo.PluginBase):
         brokerID = int(self.brokerID)
         self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
         self.logger.info(f"Sent topic: haas/status, payload: online - devices should be updated shortly")
+        self.pyapiDeviceCache()
 
         return True
 
@@ -581,6 +682,59 @@ class Plugin(indigo.PluginBase):
         }
         mqttPlugin.executeAction("publish", deviceId=brokerID, props=props, waitUntilDone=False)
         self.logger.debug(f"{devicename}: publish_topic: {topic} -> {payload}")
+
+    ########################################
+    # Methods for the subscriptions config panel
+    ########################################
+
+    def addTopic(self, valuesDict, typeId, deviceId):
+        topic = valuesDict["subscriptions_newTopic"]
+        qos = valuesDict["subscriptions_qos"]
+        self.logger.debug(f"addTopic: {typeId}, {topic} ({qos})")
+
+        topicList = list()
+        if 'subscriptions' in valuesDict:
+            for t in valuesDict['subscriptions']:
+                topicList.append(t)
+
+        if typeId == 'dxlBroker':
+            if topic not in topicList:
+                topicList.append(topic)
+
+        elif typeId == 'MQTTConnector':
+            s = "{}:{}".format(qos, topic)
+            if s not in topicList:
+                topicList.append(s)
+
+        elif typeId == 'aIoTBroker':
+            s = "{}:{}".format(qos, topic)
+            if s not in topicList:
+                topicList.append(s)
+        else:
+            self.logger.warning(f"addTopic: Invalid device type: {typeId} for device {deviceId}")
+
+        valuesDict['subscriptions'] = topicList
+        return valuesDict
+
+    @staticmethod
+    def deleteSubscriptions(valuesDict, typeId, deviceId):
+        topicList = list()
+        if 'subscriptions' in valuesDict:
+            for t in valuesDict['subscriptions']:
+                topicList.append(t)
+        for t in valuesDict['subscriptions_items']:
+            if t in topicList:
+                topicList.remove(t)
+        valuesDict['subscriptions'] = topicList
+        return valuesDict
+
+    @staticmethod
+    def subscribedList(ifilter, valuesDict, typeId, deviceId):
+        returnList = list()
+        if 'subscriptions' in valuesDict:
+            for topic in valuesDict['subscriptions']:
+                returnList.append(topic)
+        return returnList
 
     ########################################
     ########################################
@@ -712,5 +866,85 @@ class Plugin(indigo.PluginBase):
             self.publish_topic(brokerID, cameraDevice.name,
                            f"ring/{self.ring_devices[cameraDevice.address][4]}/{topicType}/{self.ring_devices[cameraDevice.address][3]}/stream/command",
                            payload)
+
+    def _run_async_thread(self):
+        self.logger.debug("_run_async_thread starting")
+        # the create_task needs to be called when the APIConnector device starts
+        #self._event_loop.create_task(self._async_start())
+        self._event_loop.run_until_complete(self._async_stop())
+        self._event_loop.close()
+
+    async def _async_start(self):
+        self.logger.info("_async_start")
+        await self.listen()
+        # add things you need to do at the start of the plugin here
+
+    async def _async_stop(self):
+        while True:
+            await asyncio.sleep(1.0)
+            if self.stopThread:
+                break
+
+    class _event_handler:  # pylint:disable=invalid-name
+        def __init__(self, ringl: Ring):
+            self.ringl = ringl
+
+        def on_event(self, event: RingEvent):
+            msg = (
+                    str(datetime.datetime.utcnow())
+                    + ": "
+                    + str(event)
+                    + " : Currently active count = "
+                    + str(len(self.ringl.push_dings_data))
+            )
+            #self.logger.info(msg)
+            indigo.server.log(msg)
+
+    async def listen(self):
+
+            ring = self.ring
+            ring.create_session()
+            store_credentials = True
+
+            """Listen to push notification like the ones sent to your phone."""
+            if not can_listen:
+                self.logger.error("Ring is not configured for listening to notifications!")
+                self.logger.error("pip install ring_doorbell[listen]")
+                return
+
+            from listen import (  # pylint:disable=import-outside-toplevel
+                RingEventListener,
+            )
+
+            def credentials_updated_callback(credentials):
+                if store_credentials:
+                    self.credentials = json.dumps(credentials)
+                else:
+                    self.logger.debug("listen: New push credentials: " + str(credentials))
+
+            credentials = None
+            if store_credentials and self.credentials != "":
+                credentials = json.loads(self.credentials)
+                self.logger.debug("listen: New push credentials: " + str(credentials))
+
+            self.logger.debug("listen - RingEventListener")
+            event_listener = RingEventListener(ring, credentials, credentials_updated_callback)
+            self.logger.debug("listen - start event_listener")
+            event_listener.start()
+            self.logger.debug("listen - add_notification_callback to event_listener")
+            event_listener.add_notification_callback(self._event_handler(ring).on_event)
+
+            self.logger.info("listen - before while wait loop")
+
+            while True:
+                await asyncio.sleep(1.0)
+                if self.stopThread:
+                    self.logger.info("listen - while loop hits stop thread condition")
+                    event_listener.stop()
+                    break
+
+            self.logger.info("listen - after while wait loop")
+
+            event_listener.stop()
 
 
