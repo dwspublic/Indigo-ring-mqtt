@@ -6,54 +6,46 @@
 		<ConfigUI>
             <Field id="subscriptions" type="list" hidden="true"><List class="self" method="subscribedList"/></Field>
             <Field id="old_subscriptions" type="list" hidden="true"><List class="self" method="subscribedList"/></Field>
-            <Field id="section" type="menu" defaultValue="connect">
+            <Field id="section" type="menu" defaultValue="connection">
                 <Label>Section:</Label>
         		<List>
-        			<Option value="connect">Connection Info</Option>
+        			<Option value="connection">Connection Info</Option>
         			<Option value="subscriptions">Topic Subscriptions</Option>
+        			<Option value="mqttconnector">MQTT Connector Plugin</Option>
         		</List>
         	</Field>
             <Field id="section_separator1" type="separator"/>
-			<Field id="address" type="textfield"  defaultValue="localhost" visibleBindingId="section" visibleBindingValue="connect">
+			<Field id="address" type="textfield"  defaultValue="localhost" visibleBindingId="section" visibleBindingValue="connection">
                 <Label>IP Address or Hostname:</Label>
             </Field>
-            <Field id="port" type="textfield" defaultValue="1883" visibleBindingId="section" visibleBindingValue="connect">
+            <Field id="port" type="textfield" defaultValue="1883" visibleBindingId="section" visibleBindingValue="connection">
                 <Label>Port:</Label>
             </Field>
-            <Field id="protocol" type="menu" defaultValue="4"  visibleBindingId="section" visibleBindingValue="connect">
+            <Field id="protocol" type="menu" defaultValue="4"  visibleBindingId="section" visibleBindingValue="connection">
         		<Label>MQTT Protocol:</Label>
         		<List>
         			<Option value="4">MQTTv311</Option>
         			<Option value="3">MQTTv31</Option>
         		</List>
         	</Field>
-            <Field id="transport" type="menu" defaultValue="tcp"  visibleBindingId="section" visibleBindingValue="connect">
+            <Field id="transport" type="menu" defaultValue="tcp"  visibleBindingId="section" visibleBindingValue="connection">
         		<Label>Transport Protocol:</Label>
         		<List>
         			<Option value="tcp">TCP</Option>
         			<Option value="websockets">WebSockets</Option>
         		</List>
         	</Field>
-            <Field id="username" type="textfield"  visibleBindingId="section" visibleBindingValue="connect">
+            <Field id="username" type="textfield"  visibleBindingId="section" visibleBindingValue="connection">
                 <Label>Username:</Label>
             </Field>
-            <Field id="password" type="textfield" secure="true" visibleBindingId="section" visibleBindingValue="connect">
+            <Field id="password" type="textfield" secure="true" visibleBindingId="section" visibleBindingValue="connection">
                 <Label>Password:</Label>
             </Field>
-            <Field id="useTLS" type="checkbox" visibleBindingId="section" visibleBindingValue="connect">
-                <Label>Use SSL/TLS:</Label>
-            </Field>
 
-            <Field id="certFile" type="textfield" visibleBindingId="section" visibleBindingValue="connect">
-                <Label>Certificate File Path (blank for default):</Label>
-            </Field>
-            <Field id="certFileLabel" type="label" fontColor="darkgray" visibleBindingId="section" visibleBindingValue="connect">
-                <Label>Non-absolute path (no leading slash) is relative to the Indigo install directory.</Label>
-            </Field>
-           <Field id="delay" type="textfield" defaultValue="0" visibleBindingId="section" visibleBindingValue="connect">
+           <Field id="delay" type="textfield" defaultValue="0" visibleBindingId="section" visibleBindingValue="connection">
                 <Label>Delay:</Label>
             </Field>
-            <Field id="delay_note" type="label" fontColor="darkgray" visibleBindingId="section" visibleBindingValue="connect">
+            <Field id="delay_note" type="label" fontColor="darkgray" visibleBindingId="section" visibleBindingValue="connection">
                 <Label>Delay starting this device.  Generally only used when this is an MQTT Broker device.</Label>
             </Field>
             <!--  This section for managing topic subscriptions for this broker  -->
@@ -87,6 +79,12 @@
                 <Title>Delete Subscriptions</Title>
                 <CallbackMethod>deleteSubscriptions</CallbackMethod>
             </Field>
+            <!--  This section for managing MQTT Connector Option for this broker  -->
+
+    		<Field id="brokerID" type="menu" visibleBindingId="section" visibleBindingValue="mqttconnector">
+		        <Label>MQTT Broker:</Label>
+		        <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
+		    </Field>
 		</ConfigUI>
 		<States>
 			<State id="status">

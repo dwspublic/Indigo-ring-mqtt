@@ -15,10 +15,6 @@
             <Option value="50">Critical Errors Only</Option>
         </List>
     </Field>       
-    <Field id="brokerID" type="menu">
-        <Label>MQTT Broker:</Label>
-        <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
-    </Field>
     <Field id="batterystateUI" type="checkbox" defaultValue="false">
         <Label>Display higher battery percentage</Label>
     </Field>
