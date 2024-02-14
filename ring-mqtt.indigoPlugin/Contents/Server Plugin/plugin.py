@@ -220,6 +220,16 @@ class Plugin(indigo.PluginBase):
                 if dev.has_capability("battery"):
                     self.ring_battery_devices[dev._attrs["location_id"] + "-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "Battery", "pyapi"]
 
+            groups = self.ring.groups()
+
+            for group in groups:
+                dev = groups[group]
+
+                if hasattr(dev, 'motion_detection'):
+                    self.ring_devices[dev.location_id + "-MA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev.location_id, "RingMotion", "pyapi"]
+                if hasattr(dev, 'lights'):
+                    self.ring_devices[dev.location_id + "-LA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev.location_id, "RingLight", "pyapi"]
+
     def pyapiUpdateDevices(self):
         self.logger.debug(f"pyapiUpdateDevices: Retrieve Ring devices through api and update indigo device states")
 
@@ -234,16 +244,69 @@ class Plugin(indigo.PluginBase):
                     device = indigo.devices[deviceid]
 
                     if self.ring_devices[device.address][4] == dev._attrs["location_id"] and self.ring_devices[device.address][3] == dev.device_id:
-                        device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.now()))
-                        if device.deviceTypeId == "RingMotion" or device.deviceTypeId == "RingDoorbell":
+                        #device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.now()))
+                        health = dev._attrs["health"]
+                        if "last_update_time" in health:
+                            device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.fromtimestamp(health["last_update_time"])))
+                        if device.deviceTypeId == "RingMotion":
+                            if hasattr(dev, "motion_detection"):
+                                if dev.motion_detection:
+                                    device.updateStateOnServer(key="motionDetectionEnabled", value="ON")
+                                else:
+                                    device.updateStateOnServer(key="motionDetectionEnabled", value="OFF")
+                                #if dev.motion_snooze == "true":
+                                #    device.updateStateOnServer(key="motionSnooze", value="ON")
+                                #else:
+                                #    device.updateStateOnServer(key="motionSnooze", value="OFF")
+                        if device.deviceTypeId == "RingMotion" or device.deviceTypeId == "RingDoorbell" or device.deviceTypeId == "RingSiren":
                             device.updateStateOnServer(key="onOffState", value=False)
                         if device.deviceTypeId == "RingCamera":
                             device.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
                             device.updateStateOnServer(key="state", value="Connected")
+                            if self.pluginPrefs.get("storeSnapShots", False):
+                                if self.pluginPrefs.get("snapshotImagePath", "") == "":
+                                    tpath = indigo.server.getInstallFolderPath() + '/Web Assets/public/ring/'
+                                    device.updateStateOnServer(key="snapshot_image",
+                                                               value="http://localhost:8176/public/ring/" + device.address + ".jpg")
+                                else:
+                                    tpath = self.pluginPrefs.get("snapshotImagePath", "")
+                                    device.updateStateOnServer(key="snapshot_image",
+                                                               value=tpath + device.address + ".jpg")
+                                if os.path.isdir(tpath):
+                                    # need a duration condition
+                                    test_file = tpath + device.address + '.mp4'
+                                    #dev.recording_download(dev.last_recording_id, test_file, override=True)
+                            if dev.last_recording_id != device.states["event_eventId1"]:
+                                device.updateStateOnServer(key="event_recordingUrl3", value=device.states["event_recordingUrl2"])
+                                device.updateStateOnServer(key="event_eventId3", value=device.states["event_eventId2"])
+                                device.updateStateOnServer(key="event_recordingUrl2", value=device.states["event_recordingUrl1"])
+                                device.updateStateOnServer(key="event_eventId2", value=device.states["event_eventId1"])
+                                device.updateStateOnServer(key="event_recordingUrl1", value=dev.recording_url(dev.last_recording_id))
+                                device.updateStateOnServer(key="event_eventId1", value=dev.last_recording_id)
+                        if device.deviceTypeId == "RingLight":
+                            if dev.lights == "on":
+                                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
+                                device.updateStateOnServer(key="onOffState", value=True)
+                            else:
+                                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+                                device.updateStateOnServer(key="onOffState", value=False)
                         if hasattr(dev, "connection_status"):
                             device.updateStateOnServer(key="status", value=dev.connection_status)
                         if hasattr(dev, "firmware"):
                             device.updateStateOnServer(key="firmwareStatus", value=dev.firmware)
+                        if "battery_life_2" in dev._attrs or "battery_life" in dev._attrs:
+                            if "battery_life_2" in dev._attrs:
+                                if int(dev._attrs["battery_life_2"]) > int(dev._attrs["battery_life"]) and self.pluginPrefs.get("batterystateUI", False):
+                                    b1 = dev._attrs["battery_life_2"]
+                                    b2 = dev._attrs["battery_life"]
+                                else:
+                                    b1 = dev._attrs["battery_life"]
+                                    b2 = dev._attrs["battery_life_2"]
+                            else:
+                                b1 = dev._attrs["battery_life"]
+                                b2 = "N/A"
+                            device.updateStateOnServer(key="batteryLevel", value=b1)
+                            device.updateStateOnServer(key="batteryLevel2", value=b2)
 
     def processMessageNotification(self, notification):
 
@@ -685,6 +748,10 @@ class Plugin(indigo.PluginBase):
 
     def actionControlDevice(self, action, device):
 
+        if device.pluginProps["apitype"] == "pyapi":
+            self.actionControlDevicePyAPI(action, device)
+            return
+
         self.logger.debug(f"actionControlDevice: Action: {action.deviceAction} Device: {device.name}")
 
         brokerID = int(self.brokerID)
@@ -721,6 +788,40 @@ class Plugin(indigo.PluginBase):
 
         else:
             self.logger.error(f"{device.name}: actionControlDevice: Unsupported action requested: {action.deviceAction}")
+
+    def actionControlDevicePyAPI(self, action, device):
+
+        self.logger.debug(f"actionControlDevicePyAPI: Action: {action.deviceAction} Device: {device.name}")
+
+        dev = self.ring.get_device_by_name(device.pluginProps["name"])
+
+        if action.deviceAction == indigo.kDeviceAction.TurnOff:
+            self.logger.debug(f"actionControlDevicePyAPI: Turn Off {device.name}")
+            if device.deviceTypeId == "RingZChime":
+                dev.test_sound(kind = 'motion')
+            elif device.deviceTypeId == "RingSiren":
+                if dev.siren:
+                    dev.siren = "off"
+            elif device.deviceTypeId == "RingLight":
+                if dev.family == "stickup_cams" and dev.lights:
+                    dev.lights = "off"
+                    device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+                    device.updateStateOnServer(key="onOffState", value=False)
+        elif action.deviceAction == indigo.kDeviceAction.TurnOn:
+            self.logger.debug(f"actionControlDevicePyAPI: Turn On {device.name}")
+            if device.deviceTypeId == "RingZChime":
+                dev.test_sound(kind = 'ding')
+            elif device.deviceTypeId == "RingSiren":
+                if dev.siren:
+                    dev.siren = "on"
+            elif device.deviceTypeId == "RingLight":
+                if dev.family == "stickup_cams" and dev.lights:
+                    dev.lights = "on"
+                    device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
+                    device.updateStateOnServer(key="onOffState", value=True)
+
+        else:
+            self.logger.error(f"{device.name}: actionControlDevicePyAPI: Unsupported action requested: {action.deviceAction}")
 
     def publish_topic(self, brokerID, devicename, topic, payload):
 
@@ -950,10 +1051,10 @@ class Plugin(indigo.PluginBase):
         def on_event(self, event: RingEvent):
             dev = self.ring.get_device_by_name(event.device_name)
             taddress = "Event not caught"
+            t = str(datetime.datetime.fromtimestamp(event.now))
             if event.kind == "motion":
                 taddress = dev._attrs["location_id"] + "-MA-" + dev.device_id
                 eventid = event.id
-                t = str(datetime.datetime.fromtimestamp(event.now))
                 for device in indigo.devices.iter(u"self"):
                     if device.address == taddress:
                         device.updateStateOnServer(key="onOffState", value=True)
@@ -961,7 +1062,6 @@ class Plugin(indigo.PluginBase):
             elif event.kind == "com.ring.push.HANDLE_NEW_DING":
                 taddress = dev._attrs["location_id"] + "-DA-" + dev.device_id
                 eventid = event.id
-                t = str(datetime.datetime.fromtimestamp(event.now))
                 for device in indigo.devices.iter(u"self"):
                     if device.address == taddress:
                         device.updateStateOnServer(key="onOffState", value=True)
