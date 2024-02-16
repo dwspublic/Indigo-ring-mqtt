@@ -827,6 +827,9 @@ class Plugin(indigo.PluginBase):
 
     def actionControlDevicePyAPI(self, action, device):
 
+        if self.PyAPIConnectorDeviceId == 0:
+            return
+
         self.logger.debug(f"actionControlDevicePyAPI: Action: {action.deviceAction} Device: {device.name}")
 
         if device.pluginProps["model"] == "Light Group":
@@ -874,6 +877,9 @@ class Plugin(indigo.PluginBase):
             self.logger.error(f"{device.name}: actionControlDevicePyAPI: Unsupported action requested: {action.deviceAction}")
 
     def publish_topic(self, brokerID, devicename, topic, payload):
+
+        if self.MQTTConnectorDeviceId == 0:
+            return
 
         if self.MQTTConnectorPlugin:
             mqttPlugin = indigo.server.getPlugin("com.flyingdiver.indigoplugin.mqtt")
