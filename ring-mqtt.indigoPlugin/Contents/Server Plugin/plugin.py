@@ -116,39 +116,56 @@ class Plugin(indigo.PluginBase):
         self.logger.info(f"{device.name}: Starting Device")
         if device.deviceTypeId == "APIConnector":
             device.updateStateOnServer(key="status", value="Not Connected")
+            self.PyAPIConnectorDeviceId = 0
             self.ringtoken = device.pluginProps["ringtoken"]
             if self.ringtoken != "":
                 auth = Auth("YourProject/1.0", json.loads(self.ringtoken), self.token_updated)
                 self.ring = Ring(auth)
                 self.PyAPIConnectorDeviceId = device.id
-                self.pyapilisten = True
-                self._event_loop.create_task(self._async_start())
-                self.pyapiDeviceCache()
-                device.updateStateOnServer(key="status", value="Connected")
+                try:
+                    self.pyapiDeviceCache()
+                except:
+                    self.logger.error(f"PyAPI Connector Failure")
+                    self.PyAPIConnectorDeviceId = 0
+                else:
+                    self.pyapilisten = True
+                    self._event_loop.create_task(self._async_start())
+                    device.updateStateOnServer(key="status", value="Connected")
             else:
                 self.pyapilisten = False
             return
         if device.deviceTypeId == "MQTTConnector":
-            self.MQTTConnectorDeviceId = device.id
-            if self.connected:
-                device.updateStateOnServer(key="status", value="Connected")
-            else:
-                device.updateStateOnServer(key="status", value="Not Connected")
             if self.MQTTConnectorPlugin:
                 if not self.mqttPlugin.isEnabled():
-                    self.logger.warning("MQTT Connector plugin not enabled!")
+                    self.logger.error(f"startup - MQTT Connector plugin not enabled!")
+                    return
+                if (self.brokerID == "0" or self.brokerID == ""):
+                    self.logger.error(f'startup - The MQTT Broker (brokerID) must be set for MQTT Connector to be functional! {self.brokerID} : {self.pluginPrefs.get("brokerID", "0")}')
                     return
                 indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
-                if (self.brokerID == "0" or self.brokerID == "") and self.old_version != "0.0.0":
-                    self.logger.error(f'startup - The MQTT Broker (brokerID) must be set for plugin to be functional! {self.brokerID} : {self.pluginPrefs.get("brokerID", "0")}')
-                elif self.pluginPrefs.get("startupHADiscovery", False):
-                    brokerID = int(self.brokerID)
-                    self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
+                self.connected = True
             else:
                 self.MQTT_SERVER = device.address
                 self.MQTT_PORT = int(device.pluginProps["port"])
                 self.username = device.pluginProps["username"]
                 self.password = device.pluginProps["password"]
+                self.MQTTConnectorDeviceId = device.id
+                try:
+                    self.connectToMQTTBroker()
+                    self.sleep(2)
+                except:
+                    self.logger.error(f"MQTT Connector Failure")
+                    device.updateStateOnServer(key="status", value="Not Connected")
+                    self.MQTTConnectorDeviceId = 0
+            if self.connected:
+                self.MQTTConnectorDeviceId = device.id
+                device.updateStateOnServer(key="status", value="Connected")
+                if self.pluginPrefs.get("startupHADiscovery", False):
+                    brokerID = int(self.brokerID)
+                    self.publish_topic(brokerID, "HA_Discovery", f"hass/status", "online")
+            else:
+                device.updateStateOnServer(key="status", value="Not Connected")
+                self.MQTTConnectorDeviceId = 0
             return
         if device.id not in self.ringmqtt_devices and device.pluginProps["apitype"] == "mqtt":
             self.ringmqtt_devices.append(device.id)
@@ -307,6 +324,25 @@ class Plugin(indigo.PluginBase):
                                 b2 = "N/A"
                             device.updateStateOnServer(key="batteryLevel", value=b1)
                             device.updateStateOnServer(key="batteryLevel2", value=b2)
+
+            groups = self.ring.groups()
+
+            for group in groups:
+                dev = groups[group]
+
+                for deviceid in self.ringpyapi_devices:
+                    device = indigo.devices[deviceid]
+
+                    if self.ring_devices[device.address][4] == dev.location_id and self.ring_devices[device.address][3] == dev.device_id:
+                        self.logger.debug(f"Group: {dev.device_id}")
+                        device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.now()))
+                        if device.deviceTypeId == "RingLight":
+                            if dev.lights:
+                                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
+                                device.updateStateOnServer(key="onOffState", value=True)
+                            else:
+                                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+                                device.updateStateOnServer(key="onOffState", value=False)
 
     def processMessageNotification(self, notification):
 
@@ -793,7 +829,13 @@ class Plugin(indigo.PluginBase):
 
         self.logger.debug(f"actionControlDevicePyAPI: Action: {action.deviceAction} Device: {device.name}")
 
-        dev = self.ring.get_device_by_name(device.pluginProps["name"])
+        if device.pluginProps["model"] == "Light Group":
+            groups = self.ring.groups()
+            dev = groups[self.ring_devices[device.address][3]]
+            isGroup = True
+        else:
+            dev = self.ring.get_device_by_name(device.pluginProps["name"])
+            isGroup = False
 
         if action.deviceAction == indigo.kDeviceAction.TurnOff:
             self.logger.debug(f"actionControlDevicePyAPI: Turn Off {device.name}")
@@ -803,7 +845,11 @@ class Plugin(indigo.PluginBase):
                 if dev.siren:
                     dev.siren = "off"
             elif device.deviceTypeId == "RingLight":
-                if dev.family == "stickup_cams" and dev.lights:
+                if isGroup:
+                    dev.lights = False
+                    device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+                    device.updateStateOnServer(key="onOffState", value=False)
+                elif dev.family == "stickup_cams" and dev.lights:
                     dev.lights = "off"
                     device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
                     device.updateStateOnServer(key="onOffState", value=False)
@@ -815,7 +861,11 @@ class Plugin(indigo.PluginBase):
                 if dev.siren:
                     dev.siren = "on"
             elif device.deviceTypeId == "RingLight":
-                if dev.family == "stickup_cams" and dev.lights:
+                if isGroup:
+                    dev.lights = True
+                    device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
+                    device.updateStateOnServer(key="onOffState", value=True)
+                elif dev.family == "stickup_cams" and dev.lights:
                     dev.lights = "on"
                     device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
                     device.updateStateOnServer(key="onOffState", value=True)
@@ -956,6 +1006,11 @@ class Plugin(indigo.PluginBase):
     ########################################
 
     def publishChimeAction(self, pluginAction, chimeDevice, callerWaitingForResult):
+
+        if chimeDevice.pluginProps["apitype"] == "pyapi":
+            self.logger.info(f"publishChimeAction - Actions not supported with API Connector")
+            return
+
         brokerID = int(self.brokerID)
         topicType = "chime"
         self.logger.debug(f"{chimeDevice.name}: publishChimeAction")
@@ -981,6 +1036,11 @@ class Plugin(indigo.PluginBase):
                            payload)
 
     def publishMotionAction(self, pluginAction, motionDevice, callerWaitingForResult):
+
+        if motionDevice.pluginProps["apitype"] == "pyapi":
+            self.logger.info(f"publishMotionAction - Actions not supported with API Connector")
+            return
+
         brokerID = int(self.brokerID)
         topicType = "camera"
         self.logger.debug(f"{motionDevice.name}: publishMotionAction")
@@ -996,6 +1056,11 @@ class Plugin(indigo.PluginBase):
                            payload)
 
     def publishLightAction(self, pluginAction, lightDevice, callerWaitingForResult):
+
+        if lightDevice.pluginProps["apitype"] == "pyapi":
+            self.logger.info(f"publishLightAction - Actions not supported with API Connector")
+            return
+
         brokerID = int(self.brokerID)
         topicType = "camera"
         self.logger.debug(f"{lightDevice.name}: publishLightAction")
@@ -1011,6 +1076,11 @@ class Plugin(indigo.PluginBase):
                            payload)
 
     def publishCameraAction(self, pluginAction, cameraDevice, callerWaitingForResult):
+
+        if cameraDevice.pluginProps["apitype"] == "pyapi":
+            self.logger.info(f"publishCameraAction - Actions not supported with API Connector")
+            return
+
         brokerID = int(self.brokerID)
         topicType = "camera"
         self.logger.debug(f"{cameraDevice.name}: publishCameraAction")
