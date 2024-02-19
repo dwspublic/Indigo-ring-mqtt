@@ -177,9 +177,10 @@ class RingEventListener:
             state = subtype
 
         created_at = ding["created_at"]
-        create_seconds = (
-            datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%S%z")
-        ).timestamp()
+        #create_seconds = (
+        #    datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%S%z")
+        #).timestamp()
+        create_seconds = time.time()
         re = RingEvent(
             id=ding["id"],
             kind=kind,

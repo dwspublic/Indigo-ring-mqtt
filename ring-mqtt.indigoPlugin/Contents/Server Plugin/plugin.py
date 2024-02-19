@@ -21,9 +21,13 @@ import asyncio
 
 import threading
 
+import time
+
 from ring_doorbell import Auth, AuthenticationError, Requires2FAError, Ring, RingEvent
 from ring_doorbell.const import CLI_TOKEN_FILE, PACKAGE_NAME, USER_AGENT
 from ring_doorbell.listen import can_listen
+SNAPSHOT_ENDPOINT = "/clients_api/snapshots/image/{0}"
+SNAPSHOT_TIMESTAMP_ENDPOINT = "/clients_api/snapshots/timestamps"
 
 RINGMQTT_MESSAGE_TYPE = "##ring##"
 kCurDevVersCount = 0  # current version of plugin devices
@@ -149,6 +153,7 @@ class Plugin(indigo.PluginBase):
                 self.MQTT_PORT = int(device.pluginProps["port"])
                 self.username = device.pluginProps["username"]
                 self.password = device.pluginProps["password"]
+                self.topicList = device.pluginProps["subscriptions"]
                 self.MQTTConnectorDeviceId = device.id
                 try:
                     self.connectToMQTTBroker()
@@ -202,8 +207,10 @@ class Plugin(indigo.PluginBase):
                 newProps = device.pluginProps
                 device.pluginProps["ringtoken"] = self.ringtoken
                 device.replacePluginPropsOnServer(newProps)
+            self.PyAPIConnectorDeviceId = 0
             return
         if device.deviceTypeId == "MQTTConnector":
+            self.MQTTConnectorDeviceId = 0
             return
         if device.id in self.ringmqtt_devices:
             self.ringmqtt_devices.remove(device.id)
@@ -263,6 +270,7 @@ class Plugin(indigo.PluginBase):
                     if self.ring_devices[device.address][4] == dev._attrs["location_id"] and self.ring_devices[device.address][3] == dev.device_id:
                         #device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.now()))
                         health = dev._attrs["health"]
+                        settings = dev._attrs["settings"]
                         if "last_update_time" in health:
                             device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.fromtimestamp(health["last_update_time"])))
                         if device.deviceTypeId == "RingMotion":
@@ -290,9 +298,13 @@ class Plugin(indigo.PluginBase):
                                     device.updateStateOnServer(key="snapshot_image",
                                                                value=tpath + device.address + ".jpg")
                                 if os.path.isdir(tpath):
-                                    # need a duration condition
-                                    test_file = tpath + device.address + '.mp4'
-                                    #dev.recording_download(dev.last_recording_id, test_file, override=True)
+                                    payloadimage = self.get_snapshot(dev)
+                                    if type(payloadimage) == bytes:
+                                        test_file = open(tpath + device.address + '.jpg', 'wb')
+                                        test_file.write(payloadimage)
+                                        test_file.close()
+                                        device.updateStateOnServer(key="snapshot_timestamp", value=str(datetime.datetime.now()))
+                                        device.updateStateOnServer(key="snapshot_type", value="Unknown")
                             if dev.last_recording_id != device.states["event_eventId1"]:
                                 device.updateStateOnServer(key="event_recordingUrl3", value=device.states["event_recordingUrl2"])
                                 device.updateStateOnServer(key="event_eventId3", value=device.states["event_eventId2"])
@@ -307,6 +319,25 @@ class Plugin(indigo.PluginBase):
                             else:
                                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
                                 device.updateStateOnServer(key="onOffState", value=False)
+                            if "floodlight_settings" in settings:
+                                p = settings["floodlight_settings"]
+                                device.updateStateOnServer(key="brightness_state", value=p["brightness"])
+                        if device.deviceTypeId == "RingZChime":
+                            if "volume" in settings:
+                                device.updateStateOnServer(key="volume", value=str(settings["volume"]))
+                            if "connected" in health and health["connected"]:
+                                device.updateStateOnServer(key="status", value="online")
+                            device.updateStateOnServer(key="play_ding_sound", value="Turn On")
+                            device.updateStateOnServer(key="play_motion_sound", value="Turn Off")
+                            do_not_disturb = dev._attrs["do_not_disturb"]
+                            if "seconds_left" in do_not_disturb and do_not_disturb["seconds_left"] > 0:
+                                device.updateStateOnServer(key="snooze_minutes_remaining", value=str(int(do_not_disturb["seconds_left"]/60)))
+                                device.updateStateOnServer(key="snooze", value="ON")
+                                device.updateStateOnServer(key="snooze_minutes", value="Unknown")
+                            else:
+                                device.updateStateOnServer(key="snooze", value="OFF")
+                                device.updateStateOnServer(key="snooze_minutes", value="0")
+                                device.updateStateOnServer(key="snooze_minutes_remaining", value="0")
                         if hasattr(dev, "connection_status"):
                             device.updateStateOnServer(key="status", value=dev.connection_status)
                         if hasattr(dev, "firmware"):
@@ -487,12 +518,13 @@ class Plugin(indigo.PluginBase):
                 device.updateStateOnServer(key="onOffState", value=True)
             else:
                 device.updateStateOnServer(key="onOffState", value=False)
+        if topic_parts[4] == "motion_detection" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
+            device.updateStateOnServer(key="motionDetectionEnabled", value=payload)
 
         if topic_parts[4] == "motion" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingMotion":
             p = json.loads(payload)
             device.updateStateOnServer(key="lastMotionTime", value=str(self.convertZeroDate(p["lastMotionTime"])))
-            device.updateStateOnServer(key="personDetected", value=p["personDetected"])
-            device.updateStateOnServer(key="motionDetectionEnabled", value=p["motionDetectionEnabled"])
+            #device.updateStateOnServer(key="personDetected", value=p["personDetected"])
 
         if topic_parts[4] == "motion_duration" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
             device.updateStateOnServer(key="motion_duration", value=payload)
@@ -604,8 +636,10 @@ class Plugin(indigo.PluginBase):
         if topic_parts[4] == "beam_duration" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
             device.updateStateOnServer(key="beam_duration", value=payload)
         if topic_parts[4] == "motion" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
+            device.updateStateOnServer(key="motionDetectionEnabled", value="ON")
             if payload == "ON":
                 device.updateStateOnServer(key="onOffState", value=True)
+                device.updateStateOnServer(key="lastMotionTime", value=str(datetime.datetime.fromtimestamp(time.time())))
             else:
                 device.updateStateOnServer(key="onOffState", value=False)
 
@@ -709,7 +743,7 @@ class Plugin(indigo.PluginBase):
             self.logger.debug(f'publishSnapshotProps: Snapshot Interval Publish for device {devName} : Payload: {payload}')
             self.publish_topic(brokerID, devName,f"ring/{self.ring_devices[devAddress][4]}/{topicType}/{self.ring_devices[devAddress][3]}/snapshot_interval/command", payload)
 
-    def generate_HAD_messages(self, valuesDict, typeId):
+    def generate_HAD_messages(self):
         self.logger.debug(f"generate_HAD_messages: Clear Device Cache, start HA Discovery and rebuild cache")
 
         self.ring_devices = {}
@@ -722,6 +756,10 @@ class Plugin(indigo.PluginBase):
         return True
 
     def create_trigger(self, valuesDict, typeId):
+
+        if not self.MQTTConnectorPlugin:
+            self.logger.info(f"No need to create triggers unless using the MQTT Connector Plugin")
+            return True
 
         found = False
 
@@ -915,19 +953,11 @@ class Plugin(indigo.PluginBase):
             for t in valuesDict['subscriptions']:
                 topicList.append(t)
 
-        if typeId == 'dxlBroker':
-            if topic not in topicList:
-                topicList.append(topic)
-
-        elif typeId == 'MQTTConnector':
+        if typeId == 'MQTTConnector':
             s = "{}:{}".format(qos, topic)
             if s not in topicList:
                 topicList.append(s)
 
-        elif typeId == 'aIoTBroker':
-            s = "{}:{}".format(qos, topic)
-            if s not in topicList:
-                topicList.append(s)
         else:
             self.logger.warning(f"addTopic: Invalid device type: {typeId} for device {deviceId}")
 
@@ -1013,18 +1043,33 @@ class Plugin(indigo.PluginBase):
 
     def publishChimeAction(self, pluginAction, chimeDevice, callerWaitingForResult):
 
-        if chimeDevice.pluginProps["apitype"] == "pyapi":
-            self.logger.info(f"publishChimeAction - Actions not supported with API Connector")
-            return
-
         brokerID = int(self.brokerID)
         topicType = "chime"
         self.logger.debug(f"{chimeDevice.name}: publishChimeAction")
         if pluginAction.props["volume"] != "":
             payload = indigo.activePlugin.substitute(pluginAction.props["volume"])
-            self.publish_topic(brokerID, chimeDevice.name,
+            if chimeDevice.pluginProps["apitype"] == "pyapi":
+                dev = self.ring.get_device_by_name(chimeDevice.pluginProps["name"])
+                dev.volume = int(payload)
+            else:
+                self.publish_topic(brokerID, chimeDevice.name,
                            f"ring/{self.ring_devices[chimeDevice.address][4]}/{topicType}/{self.ring_devices[chimeDevice.address][3]}/volume/command",
                            payload)
+        if pluginAction.props["play_motion_sound"] is True:
+            payload = "ON"
+            if chimeDevice.pluginProps["apitype"] == "pyapi":
+                dev = self.ring.get_device_by_name(chimeDevice.pluginProps["name"])
+                dev.test_sound(kind = 'motion')
+            else:
+                self.publish_topic(brokerID, chimeDevice.name,
+                               f"ring/{self.ring_devices[chimeDevice.address][4]}/{topicType}/{self.ring_devices[chimeDevice.address][3]}/play_motion_sound/command",
+                               payload)
+
+        if chimeDevice.pluginProps["apitype"] == "pyapi":
+            if pluginAction.props["snooze_minutes"] != "" or pluginAction.props["snooze"] != "":
+                self.logger.info(f"publishChimeAction - Chime snooze property changes are not supported through API Connector")
+            return
+
         if pluginAction.props["snooze_minutes"] != "":
             payload = indigo.activePlugin.substitute(pluginAction.props["snooze_minutes"])
             self.publish_topic(brokerID, chimeDevice.name,
@@ -1034,11 +1079,6 @@ class Plugin(indigo.PluginBase):
             payload = indigo.activePlugin.substitute(pluginAction.props["snooze"])
             self.publish_topic(brokerID, chimeDevice.name,
                            f"ring/{self.ring_devices[chimeDevice.address][4]}/{topicType}/{self.ring_devices[chimeDevice.address][3]}/snooze/command",
-                           payload)
-        if pluginAction.props["play_motion_sound"] is True:
-            payload = "ON"
-            self.publish_topic(brokerID, chimeDevice.name,
-                           f"ring/{self.ring_devices[chimeDevice.address][4]}/{topicType}/{self.ring_devices[chimeDevice.address][3]}/play_motion_sound/command",
                            payload)
 
     def publishMotionAction(self, pluginAction, motionDevice, callerWaitingForResult):
@@ -1110,8 +1150,8 @@ class Plugin(indigo.PluginBase):
 
     async def _async_start(self):
         if self.pyapilisten:
-            self.logger.info("_async_start")
-            await self.listen()
+            self.logger.debug("_async_start")
+            await self._pyapi_listen()
         # add things you need to do at the start of the plugin here
 
     async def _async_stop(self):
@@ -1156,7 +1196,7 @@ class Plugin(indigo.PluginBase):
             #self.logger.info(msg)
             #indigo.server.log(msg)
 
-    async def listen(self):
+    async def _pyapi_listen(self):
 
             ring = self.ring
             ring.create_session()
@@ -1176,37 +1216,37 @@ class Plugin(indigo.PluginBase):
                 if store_credentials:
                     self.credentials = json.dumps(credentials)
                 else:
-                    self.logger.debug("listen: New push credentials: " + str(credentials))
+                    self.logger.debug("_pyapi_listen: New push credentials: " + str(credentials))
 
             credentials = None
             if store_credentials and self.credentials != "":
                 credentials = json.loads(self.credentials)
-                self.logger.debug("listen: New push credentials: " + str(credentials))
+                self.logger.debug("_pyapi_listen: New push credentials: " + str(credentials))
 
-            self.logger.debug("listen - RingEventListener")
+            self.logger.debug("_pyapi_listen - RingEventListener")
             event_listener = RingEventListener(ring, credentials, credentials_updated_callback)
-            self.logger.debug("listen - start event_listener")
+            self.logger.debug("_pyapi_listen - start event_listener")
             event_listener.start()
-            self.logger.debug("listen - add_notification_callback to event_listener")
+            self.logger.debug("_pyapi_listen - add_notification_callback to event_listener")
             event_listener.add_notification_callback(self._event_handler(ring).on_event)
 
-            self.logger.info("listen - before while wait loop")
+            self.logger.debug("_pyapi_listen - before while wait loop")
+            self.logger.info("Listening for Push Events from Ring - PyAPI")
 
             while True:
                 await asyncio.sleep(1.0)
                 if self.stopThread:
-                    self.logger.info("listen - while loop hits stop thread condition")
+                    self.logger.info("_pyapi_listen - while loop hits stop thread condition")
                     event_listener.stop()
                     break
 
-            self.logger.info("listen - after while wait loop")
+            self.logger.info("_pyapi_listen - after while wait loop")
 
             event_listener.stop()
 
     def connectToMQTTBroker(self):
         try:
             self.logger.info("Connecting to the MQTT Server...")
-            self.topicList = {"ring/#", "homeassistant/#"}
             self.client.disconnect()
             self.client.loop_stop()
             self.client.username_pw_set(username=self.username, password=self.password)
@@ -1235,7 +1275,9 @@ class Plugin(indigo.PluginBase):
                 # self.client.subscribe(u"$SYS/#")
 
                 self.connected = True
-                for topic in self.topicList:
+                for s in self.topicList:
+                    qos = int(s[0:1])
+                    topic = s[2:]
                     t = topic
                     self.logger.debug(u"Subscribing to " + t)
                     try:
@@ -1279,4 +1321,29 @@ class Plugin(indigo.PluginBase):
     def handle_exception(self, exc_type, exc_value, exc_traceback):
         self.logger.error(u'Exception trapped:' + str(exc_value))
 
+    def get_snapshot(self, doorbell, retries=1, delay=1, filename=None):
+        """Take a snapshot and download it"""
+        url = SNAPSHOT_TIMESTAMP_ENDPOINT
+        snapshot = ""
+        payload = {"doorbot_ids": [doorbell._attrs.get("id")]}
+        if retries > 1:
+            doorbell._ring.query(url, method="POST", json=payload)
+        request_time = time.time()
+        for _ in range(retries):
+            time.sleep(delay)
+            if retries > 1:
+                response = doorbell._ring.query(url, method="POST", json=payload).json()
+                #if response["timestamps"][0]["timestamp"] / 1000 > request_time:
+            try:
+                snapshot = doorbell._ring.query(
+                    SNAPSHOT_ENDPOINT.format(doorbell._attrs.get("id"), raw=True)
+                ).content
+            except:
+                self.logger.debug(f"get_snapshot - ring returned 404 for device: {doorbell.name}")
+            if filename:
+                with open(filename, "wb") as jpg:
+                   jpg.write(snapshot)
+                return True
+            return snapshot
+        return False
 

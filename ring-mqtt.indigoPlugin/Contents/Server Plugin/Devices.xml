@@ -168,11 +168,6 @@
 				<TriggerLabel>lastMotionTime</TriggerLabel>
 				<ControlPageLabel>lastMotionTime</ControlPageLabel>
 			</State>
-			<State id="personDetected">
-				<ValueType>String</ValueType>
-				<TriggerLabel>personDetected</TriggerLabel>
-				<ControlPageLabel>personDetected</ControlPageLabel>
-			</State>
 			<State id="firmwareStatus">
 				<ValueType>String</ValueType>
 				<TriggerLabel>firmwareStatus</TriggerLabel>

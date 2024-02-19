@@ -12,11 +12,5 @@
     <MenuItem id="HAD_messages">
 		<Name>Reload Device Cache/HA Discovery</Name>
 		<CallbackMethod>generate_HAD_messages</CallbackMethod>
-        <ConfigUI>
-            <Field id="brokerID" type="menu">
-                <Label>MQTT Broker:</Label>
-                <List class="self" filter="" method="get_mqtt_connectors" dynamicReload="true"/>
-            </Field>
-        </ConfigUI>
 	</MenuItem>
 </MenuItems>
