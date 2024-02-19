@@ -30,7 +30,7 @@ SNAPSHOT_ENDPOINT = "/clients_api/snapshots/image/{0}"
 SNAPSHOT_TIMESTAMP_ENDPOINT = "/clients_api/snapshots/timestamps"
 
 RINGMQTT_MESSAGE_TYPE = "##ring##"
-kCurDevVersCount = 0  # current version of plugin devices
+kCurDevVersCount = 2  # current version of plugin devices
 
 
 ################################################################################
@@ -118,6 +118,7 @@ class Plugin(indigo.PluginBase):
 
     def deviceStartComm(self, device):
         self.logger.info(f"{device.name}: Starting Device")
+        self.deviceVersionCheck(device)
         if device.deviceTypeId == "APIConnector":
             device.updateStateOnServer(key="status", value="Not Connected")
             self.PyAPIConnectorDeviceId = 0
@@ -189,6 +190,7 @@ class Plugin(indigo.PluginBase):
                 device.updateStateOnServer(key="batteryLevel2", value="N/A")
             device.stateListOrDisplayStateIdChanged()
 
+    def deviceVersionCheck(self, device):
         instanceVers = int(device.pluginProps.get('devVersCount', 0))
         if instanceVers == kCurDevVersCount:
             self.logger.debug(f"{device.name}: Device is current version: {instanceVers}")
