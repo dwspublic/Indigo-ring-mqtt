@@ -197,6 +197,7 @@ class Plugin(indigo.PluginBase):
         elif instanceVers < kCurDevVersCount:
             newProps = device.pluginProps
             newProps["devVersCount"] = kCurDevVersCount
+            #Need to add some logic for Device property changes when version count is incremented
             device.replacePluginPropsOnServer(newProps)
             self.logger.debug(f"{device.name}: Updated device version: {instanceVers} -> {kCurDevVersCount}")
         else:
