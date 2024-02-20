@@ -771,7 +771,7 @@ class Plugin(indigo.PluginBase):
                 #self.clearSavedToken()
 
             self.ringtokentest = ""
-            auth = Auth("YourProject/1.0", None, self.token_updated)
+            auth = Auth("YourProject/1.0", None, self.saveToken)
             self.ringtest = Ring(auth)
 
             self.closeConnectionToRing()
@@ -910,7 +910,8 @@ class Plugin(indigo.PluginBase):
 
         # PluginPrefs will be updated AFTER we exit this method if we say validation was good
         self.logger.debug(u"Validated plugin configuration changes")
-        self.loginLimiterEngaged = False
+
+        valuesDict["ringtoken"] = self.ringtokentest
 
         # Successful, so reset prefsConfigUi state
         valuesDict["showLoginErrorField"] = "false"
@@ -932,7 +933,7 @@ class Plugin(indigo.PluginBase):
 
         # Attempt to connect (exception handling needs to occur in method that calls this method)
         self.logger.info(u"Attempting to connect to Ring.com API and login as %s" % username)
-        auth = Auth("YourProject/1.0", None, self.token_updated)
+        auth = Auth("YourProject/1.0", None, self.saveToken)
         auth.fetch_token(username, password, self.twoFactorAuthorizationCode)
         self.ringtest = Ring(auth)
 
@@ -1526,7 +1527,8 @@ class Plugin(indigo.PluginBase):
             self.logger.debug({t, v, tb})
             self.handle_exception(t, v, tb)
 
-    def on_disconnect(self):
+    def on_disconnect(self, client, userdata, rc):
+        self.logger.debug(u"Disonnected from Broker with result code " + str(rc))
         self.logger.warn(u"Disconnected from Broker. ")
         self.connected = False
 
