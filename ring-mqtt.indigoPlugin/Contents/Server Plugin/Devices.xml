@@ -101,6 +101,27 @@
 			<Field type="textfield" id="ringtoken" tooltip="Ring Token">
 				<Label>Ring Token:</Label>
 			</Field>
+			<Field id="twoFactorInfoLabel" type="label" fontSize="small" fontColor="darkgray">
+				<Label>You can either paste a ring token in the field above or generate one below if using your credentials and Two Factor Authentication.  You will be prompted to enter a verification code when you click Save.</Label>
+			</Field>
+			<Field type="textfield" id="username" tooltip="Ring.com Username">
+				<Label>Ring.com Username:</Label>
+			</Field>
+			<Field type="textfield" id="password" secure="true" tooltip="Ring.com Password">
+				<Label>Ring.com Password:</Label>
+			</Field>
+			<Field type="checkbox" id="showAuthCodeField" hidden="true" defaultValue="false">
+				<Label>HIDDEN, SHOULD NOT DISPLAY; Whether or not authorizationCode field is visible</Label>
+			</Field>
+			<Field type="textfield" id="authorizationCode" tooltip="Ring.com two-factor verification code" visibleBindingId="showAuthCodeField" visibleBindingValue="true">
+				<Label>Two-Factor Verification Code:</Label>
+			</Field>
+			<Field type="label" id="loginErrorMessage" fontColor="red" visibleBindingId="showLoginErrorField" visibleBindingValue="true">
+				<Label>Error occurred during login (hover mouse over this text to see error details)</Label>
+			</Field>
+			<Field type="checkbox" id="showLoginErrorField" hidden="true" defaultValue="false">
+				<Label>HIDDEN, SHOULD NOT DISPLAY; Whether or not loginErrorMessage field is visible</Label>
+			</Field>
 		</ConfigUI>
 		<States>
 			<State id="status">

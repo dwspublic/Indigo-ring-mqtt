@@ -26,6 +26,9 @@ import time
 from ring_doorbell import Auth, AuthenticationError, Requires2FAError, Ring, RingEvent
 from ring_doorbell.const import CLI_TOKEN_FILE, PACKAGE_NAME, USER_AGENT
 from ring_doorbell.listen import can_listen
+from requests import ConnectionError, HTTPError
+from oauthlib.oauth2.rfc6749.errors import AccessDeniedError, InvalidGrantError, MissingTokenError, CustomOAuth2Error
+
 SNAPSHOT_ENDPOINT = "/clients_api/snapshots/image/{0}"
 SNAPSHOT_TIMESTAMP_ENDPOINT = "/clients_api/snapshots/timestamps"
 
@@ -195,11 +198,12 @@ class Plugin(indigo.PluginBase):
         if instanceVers == kCurDevVersCount:
             self.logger.debug(f"{device.name}: Device is current version: {instanceVers}")
         elif instanceVers < kCurDevVersCount:
-            newProps = device.pluginProps
-            newProps["devVersCount"] = kCurDevVersCount
-            #Need to add some logic for Device property changes when version count is incremented
-            device.replacePluginPropsOnServer(newProps)
-            self.logger.debug(f"{device.name}: Updated device version: {instanceVers} -> {kCurDevVersCount}")
+            # Need to change this section when devices.xml makes critical changes (i.e. add new properties that will get used before edit dialog)
+            if device.deviceTypeId == "APIConnector":
+                newProps = device.pluginProps
+                newProps["devVersCount"] = kCurDevVersCount
+                device.replacePluginPropsOnServer(newProps)
+                self.logger.debug(f"{device.name}: Updated device version: {instanceVers} -> {kCurDevVersCount}")
         else:
             self.logger.warning(f"{device.name}: Invalid device version: {instanceVers}")
 
@@ -733,6 +737,222 @@ class Plugin(indigo.PluginBase):
         if origDev.address != newDev.address:
             return True
         return False
+
+    def validateDeviceConfigUi(self, valuesDict, typeId, devId):
+
+        if typeId != "APIConnector":
+            return True
+
+        errorDict = indigo.Dict()
+        if ((valuesDict["username"] is None) or (valuesDict["username"] == "")):
+            errorDict["username"] = "You must specify a username (e.g. janedoe@gmail.com)"
+        if ((valuesDict["password"] is None) or (valuesDict["password"] == "")):
+            errorDict["password"] = \
+                "You must specify a password"
+        if (len(errorDict) > 0):
+            return (False, valuesDict, errorDict)
+
+        self.twoFactorAuthorizationCode = valuesDict.get(u"authorizationCode", "")
+
+        # Update connection to Ring API based on any changes to credentials entered in PrefsConfigUi by user
+        try:
+            username = valuesDict.get("username", None)
+            password = valuesDict.get("password", None)
+
+            # Only clean the cache file (discard existing auth token) if the username and/or password have changed
+            currentUsername = ""
+            currentPassword = ""
+            if ('username' in self.pluginPrefs):
+                currentUsername = self.pluginPrefs['username']
+            if ('password' in self.pluginPrefs):
+                currentPassword = self.pluginPrefs['password']
+            if ((username != currentUsername) or (password != currentPassword)):
+                self.logger.debug("Username and/or password setting changed; discarding any existing authorization token")
+                #self.clearSavedToken()
+
+            self.ringtokentest = ""
+            auth = Auth("YourProject/1.0", None, self.token_updated)
+            self.ringtest = Ring(auth)
+
+            self.closeConnectionToRing()
+            self.makeConnectionToRing(username, password)
+        except ConnectionError as connectionException:
+            self.debugLog("HTTPError: %s" % repr(connectionException))
+            errorString = str(connectionException)
+            self.logger.error(errorString)
+            valuesDict["showLoginErrorField"] = "true"
+            valuesDict["showAuthCodeField"] = "false"
+            valuesDict["authorizationCode"] = ""
+            errorDict["username"] = errorString
+            errorDict["loginErrorMessage"] = errorString
+            return (False, valuesDict, errorDict)
+        except HTTPError as httpErrorException:
+            self.logger.debug("HTTPError: %s" % repr(httpErrorException))
+            errorString = str(httpErrorException)
+            if (httpErrorException.response.status_code == 401):
+                # TODO: Handle status code 401 - perhaps dial back request timing
+                errorString = "401 - Unauthorized"
+            elif (httpErrorException.response.status_code == 429):
+                # TODO: Handle status code 429 - perhaps dial back request timing
+                errorString = "429 - Too Many Requests"
+            self.logger.error(errorString)
+            valuesDict["showLoginErrorField"] = "true"
+            valuesDict["showAuthCodeField"] = "false"
+            valuesDict["authorizationCode"] = ""
+            errorDict["username"] = errorString
+            errorDict["loginErrorMessage"] = errorString
+            return (False, valuesDict, errorDict)
+        except AccessDeniedError as accessDeniedException:
+            self.logger.debug("AccessDeniedError: %s" % repr(accessDeniedException))
+            if (accessDeniedException.error == u'invalid user credentials'):
+                errorString = u"Invalid user credentials"
+                self.logger.error(errorString)
+                valuesDict["showLoginErrorField"] = "true"
+                valuesDict["showAuthCodeField"] = "false"
+                valuesDict["authorizationCode"] = ""
+                errorDict["username"] = errorString
+                errorDict["loginErrorMessage"] = errorString
+                return (False, valuesDict, errorDict)
+            elif (accessDeniedException.error == u'token is invalid or does not exists'):
+                # Clean the cache file (discard existing auth token) because token invalid/missing
+                #self.clearSavedToken()
+                errorString = u"Cached authorization token was invalid, and has been deleted; please try again"
+                self.logger.error(errorString)
+                valuesDict["showLoginErrorField"] = "true"
+                valuesDict["showAuthCodeField"] = "false"
+                valuesDict["authorizationCode"] = ""
+                errorDict["loginErrorMessage"] = errorString
+                return (False, valuesDict, errorDict)
+            else:
+                errorString = u"Unhandled AccessDeniedError: %s" % str(accessDeniedException)
+                self.logger.error(errorString)
+                valuesDict["showLoginErrorField"] = "true"
+                valuesDict["showAuthCodeField"] = "false"
+                valuesDict["authorizationCode"] = ""
+                errorDict["username"] = errorString
+                errorDict["password"] = errorString
+                errorDict["loginErrorMessage"] = errorString
+                return (False, valuesDict, errorDict)
+        except InvalidGrantError as invalidGrantException:
+            self.logger.debug("InvalidGrantError: %s" % repr(invalidGrantException))
+            # Clean the cache file (discard existing auth token) because token invalid/missing
+            #self.clearSavedToken()
+            errorString = u"Authorization token was invalid, and has been deleted; please try again"
+            self.logger.error(errorString)
+            valuesDict["showLoginErrorField"] = "true"
+            valuesDict["showAuthCodeField"] = "false"
+            valuesDict["authorizationCode"] = ""
+            errorDict["loginErrorMessage"] = errorString
+            return (False, valuesDict, errorDict)
+        except MissingTokenError as missingTokenException:
+            self.logger.debug("MissingTokenError: %s" % repr(missingTokenException))
+            valuesDict["showLoginErrorField"] = "false"
+            valuesDict["showAuthCodeField"] = "true"
+            valuesDict["authorizationCode"] = ""
+            errorDict["authorizationCode"] = "Please enter the two-factor verification code sent to you by Ring"
+            return (False, valuesDict, errorDict)
+        except Requires2FAError as requires2FAException:
+            self.logger.debug("MissingTokenError: %s" % repr(requires2FAException))
+            valuesDict["showLoginErrorField"] = "false"
+            valuesDict["showAuthCodeField"] = "true"
+            valuesDict["authorizationCode"] = ""
+            errorDict["authorizationCode"] = "Please enter the two-factor verification code sent to you by Ring"
+            return (False, valuesDict, errorDict)
+        except CustomOAuth2Error as oauthException:
+            self.logger.debug("CustomOAuth2Error: %s" % repr(oauthException))
+            if (oauthException.error == u'error requesting 2fa service to send code'):
+                errorString = u"Error asking Ring.com 2FA service to send a verification code;" \
+                              u" limited to ten requests every ten minutes, and if you make too many login attempts" \
+                              u" with an invalid code, you'll need to wait 24 hours before trying again (try logging" \
+                              u" into you account on the ring.com website for a more specific error message)"
+                self.logger.error(errorString)
+                valuesDict["showLoginErrorField"] = "true"
+                valuesDict["showAuthCodeField"] = "false"
+                valuesDict["authorizationCode"] = ""
+                errorDict["loginErrorMessage"] = errorString
+                return (False, valuesDict, errorDict)
+            elif (oauthException.error == u'Verification Code is invalid or expired'):
+                errorString = u"Verification Code is invalid or expired, please enter the new one just" \
+                              u" sent to you by Ring"
+                self.logger.error(errorString)
+                valuesDict["showLoginErrorField"] = "true"
+                valuesDict["showAuthCodeField"] = "true"
+                valuesDict["authorizationCode"] = ""
+                errorDict["authorizationCode"] = errorString
+                errorDict["loginErrorMessage"] = errorString
+                return (False, valuesDict, errorDict)
+            else:
+                errorString = u"Unhandled CustomOAuth2Error: %s" % str(oauthException)
+                self.logger.error(errorString)
+                valuesDict["showLoginErrorField"] = "true"
+                valuesDict["showAuthCodeField"] = "false"
+                valuesDict["authorizationCode"] = ""
+                errorDict["loginErrorMessage"] = errorString
+                return (False, valuesDict, errorDict)
+        except Exception as unknownException:
+            self.debugLog("Unhandled exception: %s" % repr(unknownException))
+            errorString = u"Unhandled exception: %s" % str(unknownException)
+            self.logger.error(errorString)
+            valuesDict["showLoginErrorField"] = "true"
+            valuesDict["showAuthCodeField"] = "false"
+            valuesDict["authorizationCode"] = ""
+            errorDict["loginErrorMessage"] = errorString
+            return (False, valuesDict, errorDict)
+        except:
+            errorString = u"SHOULD NEVER HAPPEN: Unexpected error, contact developer"
+            self.debugLog(errorString)
+            self.logger.error(errorString)
+            valuesDict["showLoginErrorField"] = "true"
+            valuesDict["showAuthCodeField"] = "false"
+            valuesDict["authorizationCode"] = ""
+            errorDict["loginErrorMessage"] = errorString
+            return (False, valuesDict, errorDict)
+
+        # PluginPrefs will be updated AFTER we exit this method if we say validation was good
+        self.logger.debug(u"Validated plugin configuration changes")
+        self.loginLimiterEngaged = False
+
+        # Successful, so reset prefsConfigUi state
+        valuesDict["showLoginErrorField"] = "false"
+        valuesDict["showAuthCodeField"] = "false"
+        valuesDict["authorizationCode"] = ""
+        return (True, valuesDict)
+
+    def makeConnectionToRing(self, username, password):
+        # Validate username and password
+        if ((username is None) or (username == "")):
+            self.logger.debug(u"No username specified in plugin configuration; aborting connection attempt")
+            return
+        if ((password is None) or (password == "")):
+            self.logger.debug(u"No password specified in plugin configuration; aborting connection attempt")
+            return
+
+        # Close any existing connection
+        self.closeConnectionToRing()
+
+        # Attempt to connect (exception handling needs to occur in method that calls this method)
+        self.logger.info(u"Attempting to connect to Ring.com API and login as %s" % username)
+        auth = Auth("YourProject/1.0", None, self.token_updated)
+        auth.fetch_token(username, password, self.twoFactorAuthorizationCode)
+        self.ringtest = Ring(auth)
+
+        if (self.isConnected() is True):
+            # Connection successful
+            self.logger.info(u"Connection to Ring.com API successful")
+        else:
+            # Connection failed
+            self.logger.info(u"Connection to Ring.com API failed")
+
+    ########################################
+    def closeConnectionToRing(self):
+        if self.isConnected():
+            self.ringtest.auth = None
+
+    def isConnected(self):
+        return ((self.ringtest is not None) and (self.ringtest.auth is not None))
+
+    def saveToken(self, token):
+        self.ringtesttoken = token
 
     def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
         if not userCancelled:
