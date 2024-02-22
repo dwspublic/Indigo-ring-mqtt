@@ -122,6 +122,12 @@
 			<Field type="checkbox" id="showLoginErrorField" hidden="true" defaultValue="false">
 				<Label>HIDDEN, SHOULD NOT DISPLAY; Whether or not loginErrorMessage field is visible</Label>
 			</Field>
+			<Field id="takeUpSpaceForDynamicResizingKludge" type="label" >
+				<Label></Label>
+			</Field>
+			<Field id="takeUpSpaceForDynamicResizingKludge2" type="label" >
+				<Label></Label>
+			</Field>
 		</ConfigUI>
 		<States>
 			<State id="status">

@@ -73,20 +73,11 @@ class Plugin(indigo.PluginBase):
         self.protocol = 4
         self.transport = "tcp"
         self.topicList = {}
-        self.client = mqtt.Client(client_id=f"indigo-ring-mqtt", clean_session=True, userdata=None,
-                                  protocol=self.protocol, transport=self.transport)
-        self.client.on_connect = self.on_connect
-        self.client.on_disconnect = self.on_disconnect
-        self.client.on_message = self.on_message
         self.connected = False
-
-        self.sentMessages = []
-        self.LastConnectionWarning = datetime.datetime.now() - datetime.timedelta(days=1)
 
         self.MQTTConnectorPlugin = False
         self.MQTTConnectorDeviceId = 0
         self.PyAPIConnectorDeviceId = 0
-
 
     def startup(self):
         self.logger.info("Starting ringmqtt")
@@ -153,6 +144,12 @@ class Plugin(indigo.PluginBase):
                 indigo.server.subscribeToBroadcast("com.flyingdiver.indigoplugin.mqtt", "com.flyingdiver.indigoplugin.mqtt-message_queued", "message_handler")
                 self.connected = True
             else:
+                self.client = mqtt.Client(client_id=f"indigo-ring-mqtt-{device.id}", clean_session=True, userdata=None,
+                                          protocol=self.protocol, transport=self.transport)
+                self.client.on_connect = self.on_connect
+                self.client.on_disconnect = self.on_disconnect
+                self.client.on_message = self.on_message
+                self.connected = False
                 self.MQTT_SERVER = device.address
                 self.MQTT_PORT = int(device.pluginProps["port"])
                 self.username = device.pluginProps["username"]
@@ -210,13 +207,16 @@ class Plugin(indigo.PluginBase):
     def deviceStopComm(self, device):
         self.logger.info(f"{device.name}: Stopping Device")
         if device.deviceTypeId == "APIConnector":
-            if self.ringtoken != device.pluginProps["ringtoken"]:
-                self.logger.info("Ring Token Updated")
-                self.logger.debug(f'Old Token: {device.pluginProps["ringtoken"]}')
-                self.logger.debug(f'New Token: {self.ringtoken}')
-                newProps = device.pluginProps
-                newProps["ringtoken"] = self.ringtoken
-                device.replacePluginPropsOnServer(newProps)
+            try:
+                if self.ringtoken != device.pluginProps["ringtoken"]:
+                    self.logger.info("Ring Token Updated")
+                    self.logger.debug(f'Old Token: {device.pluginProps["ringtoken"]}')
+                    self.logger.debug(f'New Token: {self.ringtoken}')
+                    newProps = device.pluginProps
+                    newProps["ringtoken"] = self.ringtoken
+                    device.replacePluginPropsOnServer(newProps)
+            except:
+                self.logger.debug(f'Failed updating Token - likely due to device being deleted')
             self.PyAPIConnectorDeviceId = 0
             return
         if device.deviceTypeId == "MQTTConnector":
@@ -224,10 +224,8 @@ class Plugin(indigo.PluginBase):
             return
         if device.id in self.ringmqtt_devices:
             self.ringmqtt_devices.remove(device.id)
-            #self.deviceRingCacheCheck(device.id)
         if device.id in self.ringpyapi_devices:
             self.ringpyapi_devices.remove(device.id)
-            #self.deviceRingCacheCheck(device.id)
 
     def token_updated(self, token):
         self.ringtoken = json.dumps(token)
@@ -744,11 +742,10 @@ class Plugin(indigo.PluginBase):
             return True
 
         errorDict = indigo.Dict()
-        if ((valuesDict["username"] is None) or (valuesDict["username"] == "")):
-            errorDict["username"] = "You must specify a username (e.g. janedoe@gmail.com)"
-        if ((valuesDict["password"] is None) or (valuesDict["password"] == "")):
-            errorDict["password"] = \
-                "You must specify a password"
+        if ((valuesDict["ringtoken"] is None) or (valuesDict["ringtoken"] == "")) and ((valuesDict["username"] is None) or (valuesDict["username"] == "")):
+            errorDict["ringtoken"] = "You must specify a ring token OR username/password (e.g. janedoe@gmail.com)"
+        elif ((valuesDict["ringtoken"] is None) or (valuesDict["ringtoken"] == "")) and ((valuesDict["password"] is None) or (valuesDict["password"] == "")):
+            errorDict["password"] = "You must specify a password"
         if (len(errorDict) > 0):
             return (False, valuesDict, errorDict)
 
@@ -756,26 +753,32 @@ class Plugin(indigo.PluginBase):
 
         # Update connection to Ring API based on any changes to credentials entered in PrefsConfigUi by user
         try:
+            ringtoken = valuesDict.get("ringtoken", None)
             username = valuesDict.get("username", None)
             password = valuesDict.get("password", None)
 
             # Only clean the cache file (discard existing auth token) if the username and/or password have changed
+            currentRingToken = ""
             currentUsername = ""
             currentPassword = ""
+            if ('ringtoken' in self.pluginPrefs):
+                currentRingToken = self.pluginPrefs['ringtoken']
             if ('username' in self.pluginPrefs):
                 currentUsername = self.pluginPrefs['username']
             if ('password' in self.pluginPrefs):
                 currentPassword = self.pluginPrefs['password']
+            if (ringtoken != currentRingToken):
+                self.logger.debug("Ring Token setting changed")
             if ((username != currentUsername) or (password != currentPassword)):
                 self.logger.debug("Username and/or password setting changed; discarding any existing authorization token")
-                #self.clearSavedToken()
+                ringtoken = ""
 
             self.ringtokentest = ""
             auth = Auth("YourProject/1.0", None, self.saveToken)
             self.ringtest = Ring(auth)
 
             self.closeConnectionToRing()
-            self.makeConnectionToRing(username, password)
+            self.makeConnectionToRing(username, password, ringtoken)
         except ConnectionError as connectionException:
             self.debugLog("HTTPError: %s" % repr(connectionException))
             errorString = str(connectionException)
@@ -909,9 +912,10 @@ class Plugin(indigo.PluginBase):
             return (False, valuesDict, errorDict)
 
         # PluginPrefs will be updated AFTER we exit this method if we say validation was good
-        self.logger.debug(u"Validated plugin configuration changes")
+        self.logger.info(u"Validated plugin configuration changes")
 
-        valuesDict["ringtoken"] = self.ringtokentest
+        if self.ringtokentest != "":
+            valuesDict["ringtoken"] = self.ringtokentest
 
         # Successful, so reset prefsConfigUi state
         valuesDict["showLoginErrorField"] = "false"
@@ -919,22 +923,27 @@ class Plugin(indigo.PluginBase):
         valuesDict["authorizationCode"] = ""
         return (True, valuesDict)
 
-    def makeConnectionToRing(self, username, password):
-        # Validate username and password
-        if ((username is None) or (username == "")):
-            self.logger.debug(u"No username specified in plugin configuration; aborting connection attempt")
-            return
-        if ((password is None) or (password == "")):
-            self.logger.debug(u"No password specified in plugin configuration; aborting connection attempt")
-            return
+    def makeConnectionToRing(self, username, password, ringtokenUI):
+        # Validate token, username and password
+        if ((ringtokenUI is None) or (ringtokenUI == "")):
+            if ((username is None) or (username == "")):
+                self.logger.debug(u"No username specified in plugin configuration; aborting connection attempt")
+                return
+            if ((password is None) or (password == "")):
+                self.logger.debug(u"No password specified in plugin configuration; aborting connection attempt")
+                return
 
         # Close any existing connection
         self.closeConnectionToRing()
 
-        # Attempt to connect (exception handling needs to occur in method that calls this method)
-        self.logger.info(u"Attempting to connect to Ring.com API and login as %s" % username)
-        auth = Auth("YourProject/1.0", None, self.saveToken)
-        auth.fetch_token(username, password, self.twoFactorAuthorizationCode)
+
+        if ringtokenUI != "":
+            self.logger.info(u"Attempting to connect to Ring.com API with token")
+            auth = Auth("YourProject/1.0", json.loads(ringtokenUI), self.saveToken)
+        else:
+            self.logger.info(u"Attempting to connect to Ring.com API and login as %s" % username)
+            auth = Auth("YourProject/1.0", None, self.saveToken)
+            auth.fetch_token(username, password, self.twoFactorAuthorizationCode)
         self.ringtest = Ring(auth)
 
         if (self.isConnected() is True):
@@ -953,13 +962,16 @@ class Plugin(indigo.PluginBase):
         return ((self.ringtest is not None) and (self.ringtest.auth is not None))
 
     def saveToken(self, token):
-        self.ringtesttoken = token
+        self.ringtokentest = token
 
     def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
         if not userCancelled:
             device = indigo.devices[devId]
             if device.deviceTypeId == "RingCamera":
                 self.publishSnapshotProps(device.pluginProps.get("snapshot_mode",""), device.pluginProps.get("snapshot_interval",""), valuesDict["snapshot_mode"], valuesDict["snapshot_interval"], device.name, valuesDict["address"])
+            if device.deviceTypeId == "APIConnector" or device.deviceTypeId == "MQTTConnector":
+                indigo.device.enable(devId, value=False)
+                indigo.device.enable(devId, value=True)
         return
     def publishSnapshotProps(self, origsnapshotMode, origsnapshotInterval, newsnapshotMode, newsnapshotInterval, devName, devAddress):
         brokerID = int(self.brokerID)
@@ -1505,7 +1517,7 @@ class Plugin(indigo.PluginBase):
                     qos = int(s[0:1])
                     topic = s[2:]
                     t = topic
-                    self.logger.debug(u"Subscribing to " + t)
+                    self.logger.info(u"Subscribing to " + t)
                     try:
                         self.client.subscribe(t)
                     except UnicodeDecodeError:
