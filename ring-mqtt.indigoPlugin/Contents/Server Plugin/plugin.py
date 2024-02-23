@@ -269,7 +269,12 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"pyapiUpdateDevices: Retrieve Ring devices through api and update indigo device states")
 
         if self.PyAPIConnectorDeviceId != 0:
-            self.ring.update_data()
+            try:
+                self.ring.update_data()
+            except:
+                self.logger.error(f"pyapiUpdateDevices - connection failure to ring")
+                return
+
             devices = self.ring.devices()
 
             for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots']):
@@ -279,7 +284,6 @@ class Plugin(indigo.PluginBase):
                     device = indigo.devices[deviceid]
 
                     if self.ring_devices[device.address][4] == dev._attrs["location_id"] and self.ring_devices[device.address][3] == dev.device_id:
-                        #device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.now()))
                         health = dev._attrs["health"]
                         settings = dev._attrs["settings"]
                         if "last_update_time" in health:
@@ -916,6 +920,8 @@ class Plugin(indigo.PluginBase):
 
         if self.ringtokentest != "":
             valuesDict["ringtoken"] = self.ringtokentest
+
+        valuesDict["address"] = "api-" + str(devId)
 
         # Successful, so reset prefsConfigUi state
         valuesDict["showLoginErrorField"] = "false"
