@@ -22,6 +22,7 @@ import asyncio
 import threading
 
 import time
+import random
 
 from ring_doorbell import Auth, AuthenticationError, Requires2FAError, Ring, RingEvent
 from ring_doorbell.const import CLI_TOKEN_FILE, PACKAGE_NAME, USER_AGENT
@@ -131,6 +132,7 @@ class Plugin(indigo.PluginBase):
                     self._event_loop.create_task(self._async_start())
                     device.updateStateOnServer(key="status", value="Connected")
             else:
+                self.logger.error(f"Ring token is blank!")
                 self.pyapilisten = False
             return
         if device.deviceTypeId == "MQTTConnector":
@@ -210,8 +212,8 @@ class Plugin(indigo.PluginBase):
             try:
                 if self.ringtoken != device.pluginProps["ringtoken"]:
                     self.logger.info("Ring Token Updated")
-                    self.logger.debug(f'Old Token: {device.pluginProps["ringtoken"]}')
-                    self.logger.debug(f'New Token: {self.ringtoken}')
+                    self.logger.info(f'Old Token: {device.pluginProps["ringtoken"]}')
+                    self.logger.info(f'New Token: {self.ringtoken}')
                     newProps = device.pluginProps
                     newProps["ringtoken"] = self.ringtoken
                     device.replacePluginPropsOnServer(newProps)
@@ -443,6 +445,10 @@ class Plugin(indigo.PluginBase):
                     if topic_parts[2] == "chime":
                         self.processZMessage(device, topic_parts, payload)
 
+                    if topic_parts[2] == "alarm":
+                        self.processAMessage(device, topic_parts, payload)
+                        self.processBMessage(device, topic_parts, payload)
+
             elif topic_parts[0] == "homeassistant":
                 payload = payload.decode("ascii")
                 self.processHADMessage(topic_parts, payload)
@@ -613,10 +619,54 @@ class Plugin(indigo.PluginBase):
             else:
                 device.updateStateOnServer(key="onOffState", value=False)
 
+    def processAMessage(self, device, topic_parts, payload):
+        self.logger.debug(f"processAMessage: {'/'.join(topic_parts)}:{payload} - Device:{device.name}")
+
+        if topic_parts[4] == "status":
+            device.updateStateOnServer(key="status", value=payload)
+        if topic_parts[4] == "info":
+            p = json.loads(payload)
+            device.updateStateOnServer(key="firmwareStatus", value=p["firmwareStatus"])
+            q = self.convertZeroDate(p["lastUpdate"])
+            device.updateStateOnServer(key="lastUpdate", value=str(q))
+            r = self.getDuration(q, datetime.datetime.now())
+            if r > int(self.pluginPrefs.get("ringCommAlertHours","06")):
+                self.logger.warning(f"Device {device.name} hasn't had communication from Ring in {r} hours")
+                if device.deviceTypeId == "RingPanelAlarm":
+                    device.updateStateImageOnServer(indigo.kStateImageSel.SensorOff)
+                    device.updateStateOnServer(key="state", value="Not Connected")
+            else:
+                if device.deviceTypeId == "RingPanelAlarm":
+                    device.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
+                    device.updateStateOnServer(key="state", value="Connected")
+        if topic_parts[4] == "motion" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
+            device.updateStateOnServer(key="motionDetectionEnabled", value="ON")
+            device.updateStateOnServer(key="lastMotionTime", value=str(datetime.datetime.now()))
+            if payload == "ON":
+                device.updateStateOnServer(key="onOffState", value=True)
+            else:
+                device.updateStateOnServer(key="onOffState", value=False)
+
+        if topic_parts[4] == "light" and topic_parts[5] == "state" and device.deviceTypeId == "RingLight":
+            if payload == "ON":
+                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
+                device.updateStateOnServer(key="onOffState", value=True)
+            else:
+                device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+                device.updateStateOnServer(key="onOffState", value=False)
+
+        if topic_parts[4] == "siren" and topic_parts[5] == "state" and device.deviceTypeId == "RingSiren":
+            if payload == "ON":
+                device.updateStateOnServer(key="onOffState", value=True)
+            else:
+                device.updateStateOnServer(key="onOffState", value=False)
+
     def processBMessage(self, device, topic_parts, payload):
         self.logger.debug(f"processBMessage: {'/'.join(topic_parts)}:{payload}")
 
         if topic_parts[4] == "battery" and topic_parts[5] == "attributes":
+            b1 = ""
+            b2 = ""
             p = json.loads(payload)
             if "batteryLife2" in p:
                 if int(p["batteryLife2"]) > int(p["batteryLife"]) and self.pluginPrefs.get("batterystateUI", False):
@@ -625,8 +675,11 @@ class Plugin(indigo.PluginBase):
                 else:
                     b1 = p["batteryLife"]
                     b2 = p["batteryLife2"]
-            else:
+            elif "batteryLife" in p:
                 b1 = p["batteryLife"]
+                b2 = "N/A"
+            elif "batteryLevel" in p:
+                b1 = p["batteryLevel"]
                 b2 = "N/A"
             device.updateStateOnServer(key="batteryLevel", value=b1)
             device.updateStateOnServer(key="batteryLevel2", value=b2)
@@ -918,10 +971,12 @@ class Plugin(indigo.PluginBase):
         # PluginPrefs will be updated AFTER we exit this method if we say validation was good
         self.logger.info(u"Validated plugin configuration changes")
 
-        if self.ringtokentest != "":
-            valuesDict["ringtoken"] = self.ringtokentest
+        if self.ringtokentest == "":
+            self.logger.error(f"Expected to get non-empty token after successful api connection!")
+        else:
+            self.ringtoken = self.ringtokentest
 
-        valuesDict["address"] = "api-" + str(devId)
+        valuesDict["address"] = "api-" + str(random.randrange(1,1000000))
 
         # Successful, so reset prefsConfigUi state
         valuesDict["showLoginErrorField"] = "false"
@@ -955,6 +1010,8 @@ class Plugin(indigo.PluginBase):
         if (self.isConnected() is True):
             # Connection successful
             self.logger.info(u"Connection to Ring.com API successful")
+            if ringtokenUI != "":
+                self.ringtokentest = ringtokenUI
         else:
             # Connection failed
             self.logger.info(u"Connection to Ring.com API failed")
@@ -968,16 +1025,13 @@ class Plugin(indigo.PluginBase):
         return ((self.ringtest is not None) and (self.ringtest.auth is not None))
 
     def saveToken(self, token):
-        self.ringtokentest = token
+        self.ringtokentest = json.dumps(token)
 
     def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
         if not userCancelled:
             device = indigo.devices[devId]
             if device.deviceTypeId == "RingCamera":
                 self.publishSnapshotProps(device.pluginProps.get("snapshot_mode",""), device.pluginProps.get("snapshot_interval",""), valuesDict["snapshot_mode"], valuesDict["snapshot_interval"], device.name, valuesDict["address"])
-            if device.deviceTypeId == "APIConnector" or device.deviceTypeId == "MQTTConnector":
-                indigo.device.enable(devId, value=False)
-                indigo.device.enable(devId, value=True)
         return
     def publishSnapshotProps(self, origsnapshotMode, origsnapshotInterval, newsnapshotMode, newsnapshotInterval, devName, devAddress):
         brokerID = int(self.brokerID)
