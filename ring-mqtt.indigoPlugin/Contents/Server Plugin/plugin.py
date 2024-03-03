@@ -124,7 +124,10 @@ class Plugin(indigo.PluginBase):
                 self.PyAPIConnectorDeviceId = device.id
                 try:
                     self.pyapiDeviceCache()
-                except:
+                except Exception:
+                    t, v, tb = sys.exc_info()
+                    self.logger.debug({t, v, tb})
+                    self.handle_exception(t, v, tb)
                     self.logger.error(f"PyAPI Connector Failure")
                     self.PyAPIConnectorDeviceId = 0
                 else:
@@ -161,7 +164,10 @@ class Plugin(indigo.PluginBase):
                 try:
                     self.connectToMQTTBroker()
                     self.sleep(2)
-                except:
+                except Exception:
+                    t, v, tb = sys.exc_info()
+                    self.logger.debug({t, v, tb})
+                    self.handle_exception(t, v, tb)
                     self.logger.error(f"MQTT Connector Failure")
                     device.updateStateOnServer(key="status", value="Not Connected")
                     self.MQTTConnectorDeviceId = 0
@@ -217,7 +223,10 @@ class Plugin(indigo.PluginBase):
                     newProps = device.pluginProps
                     newProps["ringtoken"] = self.ringtoken
                     device.replacePluginPropsOnServer(newProps)
-            except:
+            except Exception:
+                t, v, tb = sys.exc_info()
+                self.logger.debug({t, v, tb})
+                self.handle_exception(t, v, tb)
                 self.logger.debug(f'Failed updating Token - likely due to device being deleted')
             self.PyAPIConnectorDeviceId = 0
             return
@@ -273,7 +282,10 @@ class Plugin(indigo.PluginBase):
         if self.PyAPIConnectorDeviceId != 0:
             try:
                 self.ring.update_data()
-            except:
+            except Exception:
+                t, v, tb = sys.exc_info()
+                self.logger.debug({t, v, tb})
+                self.handle_exception(t, v, tb)
                 self.logger.error(f"pyapiUpdateDevices - connection failure to ring")
                 return
 
@@ -837,7 +849,7 @@ class Plugin(indigo.PluginBase):
             self.closeConnectionToRing()
             self.makeConnectionToRing(username, password, ringtoken)
         except ConnectionError as connectionException:
-            self.debugLog("HTTPError: %s" % repr(connectionException))
+            self.logger.debug("HTTPError: %s" % repr(connectionException))
             errorString = str(connectionException)
             self.logger.error(errorString)
             valuesDict["showLoginErrorField"] = "true"
@@ -950,7 +962,7 @@ class Plugin(indigo.PluginBase):
                 errorDict["loginErrorMessage"] = errorString
                 return (False, valuesDict, errorDict)
         except Exception as unknownException:
-            self.debugLog("Unhandled exception: %s" % repr(unknownException))
+            self.logger.debug("Unhandled exception: %s" % repr(unknownException))
             errorString = u"Unhandled exception: %s" % str(unknownException)
             self.logger.error(errorString)
             valuesDict["showLoginErrorField"] = "true"
@@ -960,7 +972,7 @@ class Plugin(indigo.PluginBase):
             return (False, valuesDict, errorDict)
         except:
             errorString = u"SHOULD NEVER HAPPEN: Unexpected error, contact developer"
-            self.debugLog(errorString)
+            self.logger.debug(errorString)
             self.logger.error(errorString)
             valuesDict["showLoginErrorField"] = "true"
             valuesDict["showAuthCodeField"] = "false"
@@ -1544,23 +1556,20 @@ class Plugin(indigo.PluginBase):
 
     def connectToMQTTBroker(self):
         try:
-            self.logger.info("MQTT - Connecting to the Server...")
+            self.logger.info("MQTT Connector - Connecting to the Server...")
             self.client.disconnect()
             self.client.loop_stop()
             self.client.username_pw_set(username=self.username, password=self.password)
             self.client.connect(self.MQTT_SERVER, self.MQTT_PORT, 59)
-            self.logger.info("MQTT - Connected!")
-            if self.MQTTConnectorDeviceId != 0:
-                device = indigo.devices[self.MQTTConnectorDeviceId]
-                device.updateStateOnServer(key="status", value="Connected")
+            self.logger.info("MQTT Connector - Connected!")
 
             self.client.loop_start()
         except Exception:
             t, v, tb = sys.exc_info()
             self.logger.info(f"t={t}, v={v}, traceback={tb}")
-            if v == 61:
-                self.logger.critical(u"Connection Refused when connecting to broker.")
-            elif v == 60:
+            if v.errno == 61:
+                self.logger.critical(u"Connection refused when connecting to broker.")
+            elif v.errno == 60:
                 self.logger.error(u"Timeout when connecting to broker.")
             else:
                 self.handle_exception(t, v, tb)
@@ -1573,6 +1582,9 @@ class Plugin(indigo.PluginBase):
                 # self.client.subscribe(u"$SYS/#")
 
                 self.connected = True
+                if self.MQTTConnectorDeviceId != 0:
+                    device = indigo.devices[self.MQTTConnectorDeviceId]
+                    device.updateStateOnServer(key="status", value="Connected")
                 for s in self.topicList:
                     qos = int(s[0:1])
                     topic = s[2:]
@@ -1581,19 +1593,22 @@ class Plugin(indigo.PluginBase):
                     try:
                         self.client.subscribe(t)
                     except UnicodeDecodeError:
-                        self.logger.warn(u'Failed to subscribe to ' + t + u' as it contains non-ascii characters.')
+                        self.logger.warning(u'Failed to subscribe to ' + t + u' as it contains non-ascii characters.')
+                return
 
+            if self.MQTTConnectorDeviceId != 0:
+                device = indigo.devices[self.MQTTConnectorDeviceId]
+                device.updateStateOnServer(key="status", value="Not Connected")
             if rc == 1:
-                indigo.server.log(u"Error: Invalid Protocol Version.")
+                self.logger.error(u"Invalid Protocol Version.")
             if rc == 2:
-                indigo.server.log(u"Error: Invalid Client Identifier.")
-
+                self.logger.error(u"Invalid Client Identifier.")
             if rc == 3:
-                indigo.server.log(u"Error: Server Unavailable.")
+                self.logger.error(u"Server Unavailable.")
             if rc == 4:
-                indigo.server.log(u"Error: Bad Username or Password.")
+                self.logger.error(u"Bad Username or Password.")
             if rc == 5:
-                indigo.server.log(u"Error: Not Authorised.")
+                self.logger.error(u"Not Authorised.")
         except Exception:
             t, v, tb = sys.exc_info()
             self.logger.debug({t, v, tb})
@@ -1601,8 +1616,11 @@ class Plugin(indigo.PluginBase):
 
     def on_disconnect(self, client, userdata, rc):
         self.logger.debug(u"Disonnected from Broker with result code " + str(rc))
-        self.logger.warn(u"Disconnected from Broker. ")
+        self.logger.warning(u"Disconnected from Broker. ")
         self.connected = False
+        if self.MQTTConnectorDeviceId != 0:
+            device = indigo.devices[self.MQTTConnectorDeviceId]
+            device.updateStateOnServer(key="status", value="Not Connected")
 
     # The callback for when a PUBLISH message is received from the server.
     def on_message(self, client, userdata, msg):
@@ -1637,8 +1655,11 @@ class Plugin(indigo.PluginBase):
                 snapshot = doorbell._ring.query(
                     SNAPSHOT_ENDPOINT.format(doorbell._attrs.get("id"), raw=True)
                 ).content
-            except:
+            except Exception:
+                t, v, tb = sys.exc_info()
+                self.logger.debug({t, v, tb})
                 self.logger.debug(f"get_snapshot - ring returned 404 for device: {doorbell.name}")
+                #self.handle_exception(t, v, tb)
             if filename:
                 with open(filename, "wb") as jpg:
                    jpg.write(snapshot)
