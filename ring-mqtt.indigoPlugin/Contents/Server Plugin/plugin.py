@@ -496,16 +496,16 @@ class Plugin(indigo.PluginBase):
                 q = p["device"]
                 self.ring_devices[topic_parts[2] + "-D-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingDoorbell", "mqtt"]
                 return
+            if "_contact" in topic_parts[3]:
+                p = json.loads(payload)
+                q = p["device"]
+                self.ring_devices[topic_parts[2] + "-T-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingTContact", "mqtt"]
+                return
         if topic_parts[1] == "sensor":
             if "_battery" in topic_parts[3]:
                 p = json.loads(payload)
                 q = p["device"]
                 self.ring_battery_devices[topic_parts[2] + "-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "Battery", "mqtt"]
-                return
-            if "_contact" in topic_parts[3]:
-                p = json.loads(payload)
-                q = p["device"]
-                self.ring_devices[topic_parts[2] + "-T-" + q["ids"][0]] = [q["name"], q["mf"], q["mdl"], q["ids"][0], topic_parts[2], "RingTContact", "mqtt"]
                 return
         if topic_parts[1] == "camera":
             if "_snapshot" in topic_parts[3]:
