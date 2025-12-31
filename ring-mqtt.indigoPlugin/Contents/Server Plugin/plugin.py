@@ -351,7 +351,7 @@ class Plugin(indigo.PluginBase):
                                 device.updateStateOnServer(key="onOffState", value=False)
                             if "floodlight_settings" in settings:
                                 p = settings["floodlight_settings"]
-                                device.updateStateOnServer(key="brightness_state", value=p["brightness"])
+                                #device.updateStateOnServer(key="brightness_state", value=p["brightness"])
                         if device.deviceTypeId == "RingZChime":
                             if "volume" in settings:
                                 device.updateStateOnServer(key="volume", value=str(settings["volume"]))

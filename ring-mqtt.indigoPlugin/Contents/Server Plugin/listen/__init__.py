@@ -1,13 +1,11 @@
-"Package for listener modules."
-import sys
+"""Package for listener modules."""
 
-try:
-    from .eventlistener import RingEventListener
-    from .listenerconfig import RingEventListenerConfig
+from .eventlistener import RingEventListener
+from .listenerconfig import RingEventListenerConfig
 
-    can_listen = sys.version_info >= (3, 9)  # pylint:disable=invalid-name
-except ImportError:  # pragma: no cover
-    can_listen = False  # pylint:disable=invalid-name
+# can_listen used to be checkable to see if the optional listen extra installed.
+# Now installed as default.
+can_listen = True
 
 __all__ = [
     "RingEventListener",
