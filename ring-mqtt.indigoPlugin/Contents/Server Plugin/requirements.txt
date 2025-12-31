@@ -1,2 +1,2 @@
 paho-mqtt==1.6.1
-ring_doorbell[listen]==0.8.6
+ring_doorbell==0.9.13

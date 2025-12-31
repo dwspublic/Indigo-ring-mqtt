@@ -25,7 +25,6 @@ import time
 import random
 
 from ring_doorbell import Auth, AuthenticationError, Requires2FAError, Ring, RingEvent
-from ring_doorbell.const import CLI_TOKEN_FILE, PACKAGE_NAME, USER_AGENT
 from ring_doorbell.listen import can_listen
 from requests import ConnectionError, HTTPError
 from oauthlib.oauth2.rfc6749.errors import AccessDeniedError, InvalidGrantError, MissingTokenError, CustomOAuth2Error
@@ -56,6 +55,7 @@ class Plugin(indigo.PluginBase):
         self._event_loop = None
         self._async_thread = None
         self.credentials = pluginPrefs.get("credentials", "")
+        self.icount = 3
 
         self.ringmqtt_devices = []
         self.ringpyapi_devices = []
@@ -270,6 +270,7 @@ class Plugin(indigo.PluginBase):
 
             for group in groups:
                 dev = groups[group]
+                dev.update()
 
                 if hasattr(dev, 'motion_detection'):
                     self.ring_devices[dev.location_id + "-MA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev.location_id, "RingMotion", "pyapi"]
@@ -290,6 +291,9 @@ class Plugin(indigo.PluginBase):
                 return
 
             devices = self.ring.devices()
+
+            self.icount = self.icount + 1
+            self.logger.debug(f"pyapiUpdateDevices - icount = " + str(self.icount))
 
             for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots']):
                 dev.update_health_data()
@@ -317,7 +321,7 @@ class Plugin(indigo.PluginBase):
                         if device.deviceTypeId == "RingCamera":
                             device.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
                             device.updateStateOnServer(key="state", value="Connected")
-                            if self.pluginPrefs.get("storeSnapShots", False):
+                            if self.pluginPrefs.get("storeSnapShots", False) and self.icount % 5 == 0:
                                 if self.pluginPrefs.get("snapshotImagePath", "") == "":
                                     tpath = indigo.server.getInstallFolderPath() + '/Web Assets/public/ring/'
                                     device.updateStateOnServer(key="snapshot_image",
@@ -327,13 +331,13 @@ class Plugin(indigo.PluginBase):
                                     device.updateStateOnServer(key="snapshot_image",
                                                                value=tpath + device.address + ".jpg")
                                 if os.path.isdir(tpath):
-                                    payloadimage = self.get_snapshot(dev)
+                                    payloadimage = self.get_snapshot2(dev)
                                     if type(payloadimage) == bytes:
                                         test_file = open(tpath + device.address + '.jpg', 'wb')
                                         test_file.write(payloadimage)
                                         test_file.close()
-                                        device.updateStateOnServer(key="snapshot_timestamp", value=str(datetime.datetime.now()))
-                                        device.updateStateOnServer(key="snapshot_type", value="Unknown")
+                                        device.updateStateOnServer(key="snapshot_timestamp",value=str(datetime.datetime.now()))
+                                        device.updateStateOnServer(key="snapshot_type", value="Interval")
                             if dev.last_recording_id != device.states["event_eventId1"]:
                                 device.updateStateOnServer(key="event_recordingUrl3", value=device.states["event_recordingUrl2"])
                                 device.updateStateOnServer(key="event_eventId3", value=device.states["event_eventId2"])
@@ -395,9 +399,10 @@ class Plugin(indigo.PluginBase):
                     device = indigo.devices[deviceid]
 
                     if self.ring_devices[device.address][4] == dev.location_id and self.ring_devices[device.address][3] == dev.device_id:
-                        self.logger.debug(f"Group: {dev.device_id}")
+                        self.logger.debug(f"pyapiUpdateDevices- Group ID: {dev.device_id}")
                         device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.now()))
                         if device.deviceTypeId == "RingLight":
+                            dev.update()
                             if dev.lights:
                                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
                                 device.updateStateOnServer(key="onOffState", value=True)
@@ -1515,7 +1520,7 @@ class Plugin(indigo.PluginBase):
     async def _pyapi_listen(self):
 
             ring = self.ring
-            ring.create_session()
+    #        ring.create_session()
             store_credentials = True
 
             """Listen to push notification like the ones sent to your phone."""
@@ -1524,13 +1529,14 @@ class Plugin(indigo.PluginBase):
                 self.logger.error("pip install 'ring_doorbell[listen]'")
                 return
 
-            from listen import (  # pylint:disable=import-outside-toplevel
+            from ring_doorbell.listen import (  # pylint:disable=import-outside-toplevel
                 RingEventListener,
             )
 
             def credentials_updated_callback(credentials):
                 if store_credentials:
                     self.credentials = json.dumps(credentials)
+                    self.logger.debug("_pyapi_listen: Stored credentials: " + str(credentials))
                 else:
                     self.logger.debug("_pyapi_listen: New push credentials: " + str(credentials))
 
@@ -1542,7 +1548,7 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("_pyapi_listen - RingEventListener")
             event_listener = RingEventListener(ring, credentials, credentials_updated_callback)
             self.logger.debug("_pyapi_listen - start event_listener")
-            event_listener.start()
+            await event_listener.start()
             self.logger.debug("_pyapi_listen - add_notification_callback to event_listener")
             event_listener.add_notification_callback(self._event_handler(ring).on_event)
 
@@ -1646,6 +1652,7 @@ class Plugin(indigo.PluginBase):
 
     def get_snapshot(self, doorbell, retries=1, delay=1, filename=None):
         """Take a snapshot and download it"""
+
         url = SNAPSHOT_TIMESTAMP_ENDPOINT
         snapshot = ""
         payload = {"doorbot_ids": [doorbell._attrs.get("id")]}
@@ -1673,3 +1680,29 @@ class Plugin(indigo.PluginBase):
             return snapshot
         return False
 
+    def get_snapshot2(
+        self, doorbell, retries: int = 1, delay: int = 1, filename: str | None = None
+    ) -> bytes | None:
+        """Take a snapshot and download it."""
+        url = SNAPSHOT_TIMESTAMP_ENDPOINT
+        payload = {"doorbot_ids": [doorbell._attrs.get("id")]}
+        doorbell._ring.query(url, method="POST", json=payload)
+        request_time = time.time()
+        for _ in range(retries):
+            time.sleep(delay)
+            resp = doorbell._ring.query(url, method="POST", json=payload)
+            response = resp.json()
+            self.logger.debug(f"get_snapshot2: request_time=" + str(request_time))
+            self.logger.debug(f"get_snapshot2: resp.json=" + str(response))
+            if response["timestamps"]:
+#           if (response["timestamps"][0]["timestamp"] / 1000 > request_time
+                resp = doorbell._ring.query(
+                    SNAPSHOT_ENDPOINT.format(doorbell._attrs.get("id"))
+                )
+                snapshot = resp.content
+                if filename:
+                    with open(filename, "wb") as jpg:
+                        jpg.write(snapshot)
+                    return None
+                return snapshot
+        return None
