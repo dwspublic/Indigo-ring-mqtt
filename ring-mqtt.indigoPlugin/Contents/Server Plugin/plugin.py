@@ -15,8 +15,6 @@ except ImportError:
 import sys
 import paho.mqtt.client as mqtt
 
-from pathlib import Path
-
 import asyncio
 
 import threading
@@ -24,8 +22,7 @@ import threading
 import time
 import random
 
-from ring_doorbell import Auth, AuthenticationError, Requires2FAError, Ring, RingEvent
-from ring_doorbell.listen import can_listen
+from ring_doorbell import Auth, Requires2FAError, Ring, RingEvent
 from requests import ConnectionError, HTTPError
 from oauthlib.oauth2.rfc6749.errors import AccessDeniedError, InvalidGrantError, MissingTokenError, CustomOAuth2Error
 
@@ -55,7 +52,7 @@ class Plugin(indigo.PluginBase):
         self._event_loop = None
         self._async_thread = None
         self.credentials = pluginPrefs.get("credentials", "")
-        self.icount = 3
+        self.icount = 2
 
         self.ringmqtt_devices = []
         self.ringpyapi_devices = []
@@ -99,6 +96,9 @@ class Plugin(indigo.PluginBase):
             while True:
                 if self.PyAPIConnectorDeviceId != 0:
                     self.pyapiUpdateDevices()
+                    if not self.pyapilisten:
+                        self.pyapilisten = True
+                        self._event_loop.create_task(self._async_start())
                 if not self.MQTTConnectorPlugin:
                     if self.MQTTConnectorDeviceId != 0 and not self.connected:
                         self.connectToMQTTBroker()
@@ -117,9 +117,10 @@ class Plugin(indigo.PluginBase):
         if device.deviceTypeId == "APIConnector":
             device.updateStateOnServer(key="status", value="Not Connected")
             self.PyAPIConnectorDeviceId = 0
+            self.pyapilisten = False
             self.ringtoken = device.pluginProps["ringtoken"]
             if self.ringtoken != "":
-                auth = Auth("YourProject/1.0", json.loads(self.ringtoken), self.token_updated)
+                auth = Auth(device.address, json.loads(self.ringtoken), self.token_updated)
                 self.ring = Ring(auth)
                 self.PyAPIConnectorDeviceId = device.id
                 try:
@@ -131,8 +132,6 @@ class Plugin(indigo.PluginBase):
                     self.logger.error(f"PyAPI Connector Failure")
                     self.PyAPIConnectorDeviceId = 0
                 else:
-                    self.pyapilisten = True
-                    self._event_loop.create_task(self._async_start())
                     device.updateStateOnServer(key="status", value="Connected")
             else:
                 self.logger.error(f"Ring token is blank!")
@@ -273,12 +272,17 @@ class Plugin(indigo.PluginBase):
                 dev.update()
 
                 if hasattr(dev, 'motion_detection'):
-                    self.ring_devices[dev.location_id + "-MA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev.location_id, "RingMotion", "pyapi"]
+                    self.ring_devices[dev.location_id + "-MA-" + dev.group_id] = [dev.name, "Ring", dev.model, dev.group_id, dev.location_id, "RingMotion", "pyapi"]
                 if hasattr(dev, 'lights'):
-                    self.ring_devices[dev.location_id + "-LA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev.location_id, "RingLight", "pyapi"]
+                    self.ring_devices[dev.location_id + "-LA-" + dev.group_id] = [dev.name, "Ring", dev.model, dev.group_id, dev.location_id, "RingLight", "pyapi"]
 
     def pyapiUpdateDevices(self):
         self.logger.debug(f"pyapiUpdateDevices: Retrieve Ring devices through api and update indigo device states")
+
+        self.icount = self.icount + 1
+        self.logger.debug(f"pyapiUpdateDevices - icount = " + str(self.icount))
+        #if self.icount < 3:
+        #    return
 
         if self.PyAPIConnectorDeviceId != 0:
             try:
@@ -292,11 +296,11 @@ class Plugin(indigo.PluginBase):
 
             devices = self.ring.devices()
 
-            self.icount = self.icount + 1
-            self.logger.debug(f"pyapiUpdateDevices - icount = " + str(self.icount))
-
             for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots']):
                 dev.update_health_data()
+
+                #motionevents = await dev.async_history(limit=1,kind="motion")
+                #dingevents = await dev.async_history(limit=1,kind="ding")
 
                 for deviceid in self.ringpyapi_devices:
                     device = indigo.devices[deviceid]
@@ -398,8 +402,8 @@ class Plugin(indigo.PluginBase):
                 for deviceid in self.ringpyapi_devices:
                     device = indigo.devices[deviceid]
 
-                    if self.ring_devices[device.address][4] == dev.location_id and self.ring_devices[device.address][3] == dev.device_id:
-                        self.logger.debug(f"pyapiUpdateDevices- Group ID: {dev.device_id}")
+                    if self.ring_devices[device.address][4] == dev.location_id and self.ring_devices[device.address][3] == dev.group_id:
+                        self.logger.debug(f"pyapiUpdateDevices- Group ID: {dev.group_id}")
                         device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.now()))
                         if device.deviceTypeId == "RingLight":
                             dev.update()
@@ -1520,14 +1524,10 @@ class Plugin(indigo.PluginBase):
     async def _pyapi_listen(self):
 
             ring = self.ring
-    #        ring.create_session()
+            await ring.async_create_session()
             store_credentials = True
 
             """Listen to push notification like the ones sent to your phone."""
-            if not can_listen:
-                self.logger.error("Ring is not configured for listening to notifications!")
-                self.logger.error("pip install 'ring_doorbell[listen]'")
-                return
 
             from ring_doorbell.listen import (  # pylint:disable=import-outside-toplevel
                 RingEventListener,
@@ -1536,21 +1536,23 @@ class Plugin(indigo.PluginBase):
             def credentials_updated_callback(credentials):
                 if store_credentials:
                     self.credentials = json.dumps(credentials)
-                    self.logger.debug("_pyapi_listen: Stored credentials: " + str(credentials))
+                    self.logger.debug("_pyapi_listen-callback: New Stored credentials: " + str(credentials))
                 else:
-                    self.logger.debug("_pyapi_listen: New push credentials: " + str(credentials))
+                    self.credentials = ""
+                    self.logger.debug("_pyapi_listen-callback: New push credentials: " + str(credentials))
 
             credentials = None
             if store_credentials and self.credentials != "":
                 credentials = json.loads(self.credentials)
-                self.logger.debug("_pyapi_listen: New push credentials: " + str(credentials))
+                self.logger.debug("_pyapi_listen: Load push credentials: " + str(credentials))
 
             self.logger.debug("_pyapi_listen - RingEventListener")
             event_listener = RingEventListener(ring, credentials, credentials_updated_callback)
-            self.logger.debug("_pyapi_listen - start event_listener")
-            await event_listener.start()
             self.logger.debug("_pyapi_listen - add_notification_callback to event_listener")
             event_listener.add_notification_callback(self._event_handler(ring).on_event)
+            self.logger.debug("_pyapi_listen - start event_listener")
+            rcs = await event_listener.start()
+            self.logger.debug("_pyapi_listen - return from start event_listener=" + str(rcs))
 
             self.logger.debug("_pyapi_listen - before while wait loop")
             self.logger.info("API - Listening for Push Events from Ring")
@@ -1559,12 +1561,12 @@ class Plugin(indigo.PluginBase):
                 await asyncio.sleep(1.0)
                 if self.stopThread:
                     self.logger.debug("_pyapi_listen - while loop hits stop thread condition")
-                    event_listener.stop()
+                    await event_listener.stop()
                     break
 
             self.logger.debug("_pyapi_listen - after while wait loop")
 
-            event_listener.stop()
+            await event_listener.stop()
 
     def connectToMQTTBroker(self):
         try:
