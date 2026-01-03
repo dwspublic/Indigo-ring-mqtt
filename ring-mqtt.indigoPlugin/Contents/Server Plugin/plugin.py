@@ -96,9 +96,6 @@ class Plugin(indigo.PluginBase):
             while True:
                 if self.PyAPIConnectorDeviceId != 0:
                     self.pyapiUpdateDevices()
-                    if not self.pyapilisten:
-                        self.pyapilisten = True
-                        self._event_loop.create_task(self._async_start())
                 if not self.MQTTConnectorPlugin:
                     if self.MQTTConnectorDeviceId != 0 and not self.connected:
                         self.connectToMQTTBroker()
@@ -132,6 +129,8 @@ class Plugin(indigo.PluginBase):
                     self.logger.error(f"PyAPI Connector Failure")
                     self.PyAPIConnectorDeviceId = 0
                 else:
+                    self.pyapilisten = True
+                    self._event_loop.create_task(self._async_start())
                     device.updateStateOnServer(key="status", value="Connected")
             else:
                 self.logger.error(f"Ring token is blank!")
@@ -281,8 +280,8 @@ class Plugin(indigo.PluginBase):
 
         self.icount = self.icount + 1
         self.logger.debug(f"pyapiUpdateDevices - icount = " + str(self.icount))
-        #if self.icount < 3:
-        #    return
+        if self.icount < 4:
+            return
 
         if self.PyAPIConnectorDeviceId != 0:
             try:
