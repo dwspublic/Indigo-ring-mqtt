@@ -21,6 +21,7 @@ import threading
 
 import time
 import random
+from pathlib import Path
 
 from ring_doorbell import Auth, Requires2FAError, Ring, RingEvent
 from requests import ConnectionError, HTTPError
@@ -51,7 +52,7 @@ class Plugin(indigo.PluginBase):
 
         self._event_loop = None
         self._async_thread = None
-        self.credentials = pluginPrefs.get("credentials", "")
+        self.user_agent = ""
         self.icount = 2
 
         self.ringmqtt_devices = []
@@ -89,7 +90,6 @@ class Plugin(indigo.PluginBase):
         self.logger.info("Stopping ringmqtt")
         self.pluginPrefs["ring_devices"] = str(self.ring_devices)
         self.pluginPrefs["ring_battery_devices"] = str(self.ring_battery_devices)
-        self.pluginPrefs["credentials"] = self.credentials
 
     def runConcurrentThread(self):
         try:
@@ -115,9 +115,10 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="status", value="Not Connected")
             self.PyAPIConnectorDeviceId = 0
             self.pyapilisten = False
-            self.ringtoken = device.pluginProps["ringtoken"]
-            if self.ringtoken != "":
-                auth = Auth(device.address, json.loads(self.ringtoken), self.token_updated)
+            self.user_agent = str(device.address)
+            cache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".token.cache")
+            if cache_file.is_file():
+                auth = Auth(self.user_agent, json.loads(cache_file.read_text()), self.token_updated)
                 self.ring = Ring(auth)
                 self.PyAPIConnectorDeviceId = device.id
                 try:
@@ -213,19 +214,19 @@ class Plugin(indigo.PluginBase):
     def deviceStopComm(self, device):
         self.logger.info(f"{device.name}: Stopping Device")
         if device.deviceTypeId == "APIConnector":
-            try:
-                if self.ringtoken != device.pluginProps["ringtoken"]:
-                    self.logger.info("Ring Token Updated")
-                    self.logger.info(f'Old Token: {device.pluginProps["ringtoken"]}')
-                    self.logger.info(f'New Token: {self.ringtoken}')
-                    newProps = device.pluginProps
-                    newProps["ringtoken"] = self.ringtoken
-                    device.replacePluginPropsOnServer(newProps)
-            except Exception:
-                t, v, tb = sys.exc_info()
-                self.logger.debug({t, v, tb})
-                self.handle_exception(t, v, tb)
-                self.logger.debug(f'Failed updating Token - likely due to device being deleted')
+            #try:
+            #    if self.ringtoken != device.pluginProps["ringtoken"]:
+            #        self.logger.info("Ring Token Updated")
+            #        self.logger.info(f'Old Token: {device.pluginProps["ringtoken"]}')
+            #        self.logger.info(f'New Token: {self.ringtoken}')
+            #        newProps = device.pluginProps
+            #        newProps["ringtoken"] = self.ringtoken
+            #        device.replacePluginPropsOnServer(newProps)
+            #except Exception:
+            #    t, v, tb = sys.exc_info()
+            #    self.logger.debug({t, v, tb})
+            #    self.handle_exception(t, v, tb)
+            #    self.logger.debug(f'Failed updating Token - likely due to device being deleted')
             self.PyAPIConnectorDeviceId = 0
             return
         if device.deviceTypeId == "MQTTConnector":
@@ -237,7 +238,8 @@ class Plugin(indigo.PluginBase):
             self.ringpyapi_devices.remove(device.id)
 
     def token_updated(self, token):
-        self.ringtoken = json.dumps(token)
+        cache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".token.cache")
+        cache_file.write_text(json.dumps(token))
 
     def pyapiDeviceCache(self):
         self.logger.debug(f"pyapiDeviceCache: Retrieve Ring devices through api and update cache")
@@ -324,6 +326,10 @@ class Plugin(indigo.PluginBase):
                         if device.deviceTypeId == "RingCamera":
                             device.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
                             device.updateStateOnServer(key="state", value="Connected")
+                            if hasattr(dev, "connection_status"):
+                                if dev.connection_status != "online":
+                                    device.updateStateImageOnServer(indigo.kStateImageSel.SensorOff)
+                                    device.updateStateOnServer(key="state", value="Not Connected")
                             if self.pluginPrefs.get("storeSnapShots", False) and self.icount % 5 == 0:
                                 if self.pluginPrefs.get("snapshotImagePath", "") == "":
                                     tpath = indigo.server.getInstallFolderPath() + '/Web Assets/public/ring/'
@@ -334,7 +340,7 @@ class Plugin(indigo.PluginBase):
                                     device.updateStateOnServer(key="snapshot_image",
                                                                value=tpath + device.address + ".jpg")
                                 if os.path.isdir(tpath):
-                                    payloadimage = self.get_snapshot2(dev)
+                                    payloadimage = self.get_snapshot(dev)
                                     if type(payloadimage) == bytes:
                                         test_file = open(tpath + device.address + '.jpg', 'wb')
                                         test_file.write(payloadimage)
@@ -839,6 +845,7 @@ class Plugin(indigo.PluginBase):
             ringtoken = valuesDict.get("ringtoken", None)
             username = valuesDict.get("username", None)
             password = valuesDict.get("password", None)
+            user_agent = valuesDict.get("address", None)
 
             # Only clean the cache file (discard existing auth token) if the username and/or password have changed
             currentRingToken = ""
@@ -857,11 +864,11 @@ class Plugin(indigo.PluginBase):
                 ringtoken = ""
 
             self.ringtokentest = ""
-            auth = Auth("YourProject/1.0", None, self.saveToken)
+            auth = Auth(user_agent, None, self.saveToken)
             self.ringtest = Ring(auth)
 
             self.closeConnectionToRing()
-            self.makeConnectionToRing(username, password, ringtoken)
+            self.makeConnectionToRing(username, password, ringtoken, user_agent)
         except ConnectionError as connectionException:
             self.logger.debug("HTTPError: %s" % repr(connectionException))
             errorString = str(connectionException)
@@ -999,10 +1006,17 @@ class Plugin(indigo.PluginBase):
 
         if self.ringtokentest == "":
             self.logger.error(f"Expected to get non-empty token after successful api connection!")
-        else:
-            self.ringtoken = self.ringtokentest
+        #else:
+        #    self.ringtoken = self.ringtokentest
 
-        valuesDict["address"] = "api-" + str(random.randrange(1,1000000))
+        if "api-" not in user_agent:
+            valuesDict["address"] = "api-" + str(random.randrange(1,1000000))
+
+        cache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + user_agent + ".token.cache")
+        cache_file.write_text(json.dumps(self.ringtokentest))
+        fcmcache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".fcmtoken.cache")
+        if fcmcache_file.is_file():
+            os.remove(fcmcache_file)
 
         # Successful, so reset prefsConfigUi state
         valuesDict["showLoginErrorField"] = "false"
@@ -1010,7 +1024,7 @@ class Plugin(indigo.PluginBase):
         valuesDict["authorizationCode"] = ""
         return (True, valuesDict)
 
-    def makeConnectionToRing(self, username, password, ringtokenUI):
+    def makeConnectionToRing(self, username, password, ringtokenUI, user_agent):
         # Validate token, username and password
         if ((ringtokenUI is None) or (ringtokenUI == "")):
             if ((username is None) or (username == "")):
@@ -1026,10 +1040,10 @@ class Plugin(indigo.PluginBase):
 
         if ringtokenUI != "":
             self.logger.info(u"Attempting to connect to Ring.com API with token")
-            auth = Auth("YourProject/1.0", json.loads(ringtokenUI), self.saveToken)
+            auth = Auth(user_agent, json.loads(ringtokenUI), self.saveToken)
         else:
             self.logger.info(u"Attempting to connect to Ring.com API and login as %s" % username)
-            auth = Auth("YourProject/1.0", None, self.saveToken)
+            auth = Auth(user_agent, None, self.saveToken)
             auth.fetch_token(username, password, self.twoFactorAuthorizationCode)
         self.ringtest = Ring(auth)
 
@@ -1051,7 +1065,7 @@ class Plugin(indigo.PluginBase):
         return ((self.ringtest is not None) and (self.ringtest.auth is not None))
 
     def saveToken(self, token):
-        self.ringtokentest = json.dumps(token)
+        self.ringtokentest = token
 
     def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
         if not userCancelled:
@@ -1534,15 +1548,16 @@ class Plugin(indigo.PluginBase):
 
             def credentials_updated_callback(credentials):
                 if store_credentials:
-                    self.credentials = json.dumps(credentials)
-                    self.logger.debug("_pyapi_listen-callback: New Stored credentials: " + str(credentials))
+                    fcmcache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".fcmtoken.cache")
+                    fcmcache_file.write_text(json.dumps(credentials))
+                    self.logger.debug("_pyapi_listen-callback: New push Stored credentials: " + str(credentials))
                 else:
-                    self.credentials = ""
                     self.logger.debug("_pyapi_listen-callback: New push credentials: " + str(credentials))
 
             credentials = None
-            if store_credentials and self.credentials != "":
-                credentials = json.loads(self.credentials)
+            fcmcache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".fcmtoken.cache")
+            if store_credentials and fcmcache_file.is_file():
+                credentials = json.loads(fcmcache_file.read_text())
                 self.logger.debug("_pyapi_listen: Load push credentials: " + str(credentials))
 
             self.logger.debug("_pyapi_listen - RingEventListener")
@@ -1651,37 +1666,7 @@ class Plugin(indigo.PluginBase):
     def handle_exception(self, exc_type, exc_value, exc_traceback):
         self.logger.error(u'Exception trapped:' + str(exc_value))
 
-    def get_snapshot(self, doorbell, retries=1, delay=1, filename=None):
-        """Take a snapshot and download it"""
-
-        url = SNAPSHOT_TIMESTAMP_ENDPOINT
-        snapshot = ""
-        payload = {"doorbot_ids": [doorbell._attrs.get("id")]}
-        if retries > 1:
-            doorbell._ring.query(url, method="POST", json=payload)
-        request_time = time.time()
-        for _ in range(retries):
-            time.sleep(delay)
-            if retries > 1:
-                response = doorbell._ring.query(url, method="POST", json=payload).json()
-                #if response["timestamps"][0]["timestamp"] / 1000 > request_time:
-            try:
-                snapshot = doorbell._ring.query(
-                    SNAPSHOT_ENDPOINT.format(doorbell._attrs.get("id"), raw=True)
-                ).content
-            except Exception:
-                t, v, tb = sys.exc_info()
-                self.logger.debug({t, v, tb})
-                self.logger.debug(f"get_snapshot - ring returned 404 for device: {doorbell.name}")
-                #self.handle_exception(t, v, tb)
-            if filename:
-                with open(filename, "wb") as jpg:
-                   jpg.write(snapshot)
-                return True
-            return snapshot
-        return False
-
-    def get_snapshot2(
+    def get_snapshot(
         self, doorbell, retries: int = 1, delay: int = 1, filename: str | None = None
     ) -> bytes | None:
         """Take a snapshot and download it."""
@@ -1693,8 +1678,8 @@ class Plugin(indigo.PluginBase):
             time.sleep(delay)
             resp = doorbell._ring.query(url, method="POST", json=payload)
             response = resp.json()
-            self.logger.debug(f"get_snapshot2: request_time=" + str(request_time))
-            self.logger.debug(f"get_snapshot2: resp.json=" + str(response))
+            self.logger.debug(f"get_snapshot: request_time=" + str(request_time))
+            self.logger.debug(f"get_snapshot: resp.json=" + str(response))
             if response["timestamps"]:
 #           if (response["timestamps"][0]["timestamp"] / 1000 > request_time
                 resp = doorbell._ring.query(
