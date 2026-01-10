@@ -53,7 +53,8 @@ class Plugin(indigo.PluginBase):
         self._event_loop = None
         self._async_thread = None
         self.user_agent = ""
-        self.icount = 2
+        self.apiconndevicerestart = False
+        self.icount = 1
 
         self.ringmqtt_devices = []
         self.ringpyapi_devices = []
@@ -102,7 +103,11 @@ class Plugin(indigo.PluginBase):
 
                 self.sleep(60)  # in seconds
         except self.StopThread:
+            self.logger.debug(f"runConcurrentThread - StopThread exception")
             # do any cleanup here
+            if self.task is not None:
+                self.pyapilisten = False
+                self.task.cancel()
             pass
     def message_handler(self, notification):
         self.logger.debug(f"message_handler: MQTT message {notification['message_type']} from brokerId: {self.brokerID}")
@@ -115,6 +120,7 @@ class Plugin(indigo.PluginBase):
             device.updateStateOnServer(key="status", value="Not Connected")
             self.PyAPIConnectorDeviceId = 0
             self.pyapilisten = False
+            self.task = None
             self.user_agent = str(device.address)
             cache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".token.cache")
             if cache_file.is_file():
@@ -127,11 +133,11 @@ class Plugin(indigo.PluginBase):
                     t, v, tb = sys.exc_info()
                     self.logger.debug({t, v, tb})
                     self.handle_exception(t, v, tb)
-                    self.logger.error(f"PyAPI Connector Failure")
+                    self.logger.error(f"deviceStartComm - PyAPI Connector Failure")
                     self.PyAPIConnectorDeviceId = 0
                 else:
-                    self.pyapilisten = True
-                    self._event_loop.create_task(self._async_start())
+                    #self.pyapilisten = True
+                    #self._event_loop.create_task(self._async_start())
                     device.updateStateOnServer(key="status", value="Connected")
             else:
                 self.logger.error(f"Ring token is blank!")
@@ -214,19 +220,10 @@ class Plugin(indigo.PluginBase):
     def deviceStopComm(self, device):
         self.logger.info(f"{device.name}: Stopping Device")
         if device.deviceTypeId == "APIConnector":
-            #try:
-            #    if self.ringtoken != device.pluginProps["ringtoken"]:
-            #        self.logger.info("Ring Token Updated")
-            #        self.logger.info(f'Old Token: {device.pluginProps["ringtoken"]}')
-            #        self.logger.info(f'New Token: {self.ringtoken}')
-            #        newProps = device.pluginProps
-            #        newProps["ringtoken"] = self.ringtoken
-            #        device.replacePluginPropsOnServer(newProps)
-            #except Exception:
-            #    t, v, tb = sys.exc_info()
-            #    self.logger.debug({t, v, tb})
-            #    self.handle_exception(t, v, tb)
-            #    self.logger.debug(f'Failed updating Token - likely due to device being deleted')
+            self.logger.debug(f"deviceStopComm - APIConnector device")
+            if self.task is not None:
+                self.pyapilisten = False
+                self.task.cancel()
             self.PyAPIConnectorDeviceId = 0
             return
         if device.deviceTypeId == "MQTTConnector":
@@ -282,8 +279,14 @@ class Plugin(indigo.PluginBase):
 
         self.icount = self.icount + 1
         self.logger.debug(f"pyapiUpdateDevices - icount = " + str(self.icount))
-        if self.icount < 4:
+        if self.icount == 3:
+            self.pyapilisten = True
+            self.task = self._event_loop.create_task(self._async_start())
             return
+        #if self.icount == 4:
+        #    self.pyapilisten = False
+        #    self.task.cancel()
+        #    return
 
         if self.PyAPIConnectorDeviceId != 0:
             try:
@@ -821,14 +824,21 @@ class Plugin(indigo.PluginBase):
         return valuesDict
 
     def didDeviceCommPropertyChange(self, origDev, newDev):
-        if origDev.address != newDev.address:
-            return True
+        #self.logger.debug(f"didDeviceCommPropertyChange - device id = {newDev.deviceTypeId}")
+        if newDev.deviceTypeId == "APIConnector":
+            if self.apiconndevicerestart == True:
+                self.apiconndevicerestart = False
+                return True
+        #if origDev.address != newDev.address:
+        #    return True
         return False
 
     def validateDeviceConfigUi(self, valuesDict, typeId, devId):
 
         if typeId != "APIConnector":
             return True
+
+        self.apiconndevicerestart = False
 
         errorDict = indigo.Dict()
         if ((valuesDict["ringtoken"] is None) or (valuesDict["ringtoken"] == "")) and ((valuesDict["username"] is None) or (valuesDict["username"] == "")):
@@ -846,6 +856,9 @@ class Plugin(indigo.PluginBase):
             username = valuesDict.get("username", None)
             password = valuesDict.get("password", None)
             user_agent = valuesDict.get("address", None)
+
+            if user_agent is None:
+                user_agent = "api-" + str(random.randrange(1, 1000000))
 
             # Only clean the cache file (discard existing auth token) if the username and/or password have changed
             currentRingToken = ""
@@ -1009,14 +1022,18 @@ class Plugin(indigo.PluginBase):
         #else:
         #    self.ringtoken = self.ringtokentest
 
-        if "api-" not in user_agent:
-            valuesDict["address"] = "api-" + str(random.randrange(1,1000000))
+        valuesDict["address"] = user_agent
 
         cache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + user_agent + ".token.cache")
         cache_file.write_text(json.dumps(self.ringtokentest))
-        fcmcache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".fcmtoken.cache")
-        if fcmcache_file.is_file():
-            os.remove(fcmcache_file)
+        # if the user_agent changes, then delete the fcmcache file
+        #fcmcache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".fcmtoken.cache")
+        #if fcmcache_file.is_file():
+        #    os.remove(fcmcache_file)
+
+        self.icount = 1
+
+        self.apiconndevicerestart = True
 
         # Successful, so reset prefsConfigUi state
         valuesDict["showLoginErrorField"] = "false"
@@ -1571,15 +1588,19 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("_pyapi_listen - before while wait loop")
             self.logger.info("API - Listening for Push Events from Ring")
 
-            while True:
-                await asyncio.sleep(1.0)
-                if self.stopThread:
-                    self.logger.debug("_pyapi_listen - while loop hits stop thread condition")
-                    await event_listener.stop()
-                    break
+            try:
+                while True:
+                    await asyncio.sleep(1.0)
+            except asyncio.CancelledError:
+                self.logger.debug("_pyapi_listen - while loop hits task cancelled condition")
+                pass
+            except self.stopThread:
+                self.logger.debug("_pyapi_listen - while loop hits stop thread condition")
+                pass
 
             self.logger.debug("_pyapi_listen - after while wait loop")
 
+            self.logger.debug("_pyapi_listen - stop event_listener")
             await event_listener.stop()
 
     def connectToMQTTBroker(self):
