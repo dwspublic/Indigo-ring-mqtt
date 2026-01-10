@@ -22,6 +22,21 @@ import threading
 import time
 import random
 from pathlib import Path
+import shutil
+
+cffi_check = 0
+cffi_package_dir1 = Path(indigo.server.getInstallFolderPath() + "/Plugins/ring-mqtt.indigoPlugin/Contents/Packages/cffi")
+if cffi_package_dir1.is_dir():
+    cffi_check = cffi_check + 1
+    shutil.rmtree(cffi_package_dir1)
+cffi_package_dir2 = Path(indigo.server.getInstallFolderPath() + "/Plugins/ring-mqtt.indigoPlugin/Contents/Packages/cffi-2.0.0.dist-info")
+if cffi_package_dir2.is_dir():
+    cffi_check = cffi_check + 1
+    shutil.rmtree(cffi_package_dir2)
+cffi_package_file = Path(indigo.server.getInstallFolderPath() + "/Plugins/ring-mqtt.indigoPlugin/Contents/Packages/_cffi_backend.cpython-311-darwin.so")
+if cffi_package_file.is_file():
+    cffi_check = cffi_check + 1
+    os.remove(cffi_package_file)
 
 from ring_doorbell import Auth, Requires2FAError, Ring, RingEvent
 from requests import ConnectionError, HTTPError
@@ -49,6 +64,8 @@ class Plugin(indigo.PluginBase):
         self.indigo_log_handler.setLevel(self.logLevel)
         self.logger.debug(f"logLevel = {self.logLevel}")
         self.brokerID = pluginPrefs.get("brokerID", "0")
+
+        self.logger.debug(f"cffi_check = {str(cffi_check)}")
 
         self._event_loop = None
         self._async_thread = None
@@ -136,8 +153,8 @@ class Plugin(indigo.PluginBase):
                     self.logger.error(f"deviceStartComm - PyAPI Connector Failure")
                     self.PyAPIConnectorDeviceId = 0
                 else:
-                    #self.pyapilisten = True
-                    #self._event_loop.create_task(self._async_start())
+                    self.pyapilisten = True
+                    self._event_loop.create_task(self._async_start())
                     device.updateStateOnServer(key="status", value="Connected")
             else:
                 self.logger.error(f"Ring token is blank!")
@@ -279,13 +296,11 @@ class Plugin(indigo.PluginBase):
 
         self.icount = self.icount + 1
         self.logger.debug(f"pyapiUpdateDevices - icount = " + str(self.icount))
-        if self.icount == 3:
-            self.pyapilisten = True
-            self.task = self._event_loop.create_task(self._async_start())
+        if self.icount == 2:
             return
-        #if self.icount == 4:
-        #    self.pyapilisten = False
-        #    self.task.cancel()
+        #if self.icount == 3:
+        #    self.pyapilisten = True
+        #    self.task = self._event_loop.create_task(self._async_start())
         #    return
 
         if self.PyAPIConnectorDeviceId != 0:
@@ -1554,7 +1569,7 @@ class Plugin(indigo.PluginBase):
     async def _pyapi_listen(self):
 
             ring = self.ring
-            await ring.async_create_session()
+            #await ring.async_create_session()
             store_credentials = True
 
             """Listen to push notification like the ones sent to your phone."""
