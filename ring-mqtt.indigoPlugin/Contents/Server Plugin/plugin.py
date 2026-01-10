@@ -24,6 +24,9 @@ import random
 from pathlib import Path
 import shutil
 
+# Hack for M1 - which doesn't install the correct arch for cffi
+# I remove cffi from the plugin-directory and then it defaults to indigo install
+# Need to correct the code for cffi version changes - currently checking cffi 2.0.0
 cffi_check = 0
 cffi_package_dir1 = Path(indigo.server.getInstallFolderPath() + "/Plugins/ring-mqtt.indigoPlugin/Contents/Packages/cffi")
 if cffi_package_dir1.is_dir():
