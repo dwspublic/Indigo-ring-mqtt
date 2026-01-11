@@ -288,8 +288,9 @@ class Plugin(indigo.PluginBase):
             for group in groups:
                 dev = groups[group]
                 dev.update()
+                health = dev._health_attrs
 
-                if hasattr(dev, 'motion_detection'):
+                if hasattr(dev, 'motion_detection') or "motion_notifications_on" in health:
                     self.ring_devices[dev.location_id + "-MA-" + dev.group_id] = [dev.name, "Ring", dev.model, dev.group_id, dev.location_id, "RingMotion", "pyapi"]
                 if hasattr(dev, 'lights'):
                     self.ring_devices[dev.location_id + "-LA-" + dev.group_id] = [dev.name, "Ring", dev.model, dev.group_id, dev.location_id, "RingLight", "pyapi"]
@@ -326,7 +327,10 @@ class Plugin(indigo.PluginBase):
 
                 for deviceid in self.ringpyapi_devices:
                     device = indigo.devices[deviceid]
+                    if device.address is None:
+                        break
 
+                    # TO-DO add a check if no ring device has been selected
                     if self.ring_devices[device.address][4] == dev._attrs["location_id"] and self.ring_devices[device.address][3] == dev.device_id:
                         health = dev._attrs["health"]
                         settings = dev._attrs["settings"]
@@ -428,16 +432,17 @@ class Plugin(indigo.PluginBase):
 
             for group in groups:
                 dev = groups[group]
+                dev.update()
+                health = dev._health_attrs
+
+                self.logger.debug(f"pyapiUpdateDevices- Group ID: {dev.group_id}")
 
                 for deviceid in self.ringpyapi_devices:
                     device = indigo.devices[deviceid]
 
                     if self.ring_devices[device.address][4] == dev.location_id and self.ring_devices[device.address][3] == dev.group_id:
-                        self.logger.debug(f"pyapiUpdateDevices- Group ID: {dev.group_id}")
                         device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.now()))
                         if device.deviceTypeId == "RingLight":
-                            dev.update()
-                            health = dev._health_attrs
                             device.updateStateOnServer(key="beam_duration", value="N/A")
                             device.updateStateOnServer(key="brightness_state", value="N/A")
                             device.updateStateOnServer(key="firmwareStatus", value="N/A")
@@ -448,6 +453,22 @@ class Plugin(indigo.PluginBase):
                                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
                                 device.updateStateOnServer(key="onOffState", value=False)
                             device.updateStateOnServer(key="status", value="online")
+                        if device.deviceTypeId == "RingMotion":
+                            device.updateStateOnServer(key="lastMotionTime", value="N/A")
+                            device.updateStateOnServer(key="firmwareStatus", value="N/A")
+                            device.updateStateOnServer(key="motion_duration", value="N/A")
+                            if "motion_notifications_on" in health:
+                                if health["motion_notifications_on"]:
+                                    device.updateStateOnServer(key="motionDetectionEnabled", value="ON")
+                                else:
+                                    device.updateStateOnServer(key="motionDetectionEnabled", value="OFF")
+                                #if dev.motion_snooze == "true":
+                                #    device.updateStateOnServer(key="motionSnooze", value="ON")
+                                #else:
+                                #    device.updateStateOnServer(key="motionSnooze", value="OFF")
+                        device.updateStateOnServer(key="status", value="online")
+                        if device.deviceTypeId == "RingMotion":
+                            device.updateStateOnServer(key="onOffState", value=False)
 
     def processMessageNotification(self, notification):
 
@@ -853,7 +874,7 @@ class Plugin(indigo.PluginBase):
     def didDeviceCommPropertyChange(self, origDev, newDev):
         #self.logger.debug(f"didDeviceCommPropertyChange - device id = {newDev.deviceTypeId}")
         if newDev.deviceTypeId == "APIConnector":
-            if self.apiconndevicerestart == True:
+            if self.apiconndevicerestart == True and origDev.address is not None:
                 self.apiconndevicerestart = False
                 return True
         #if origDev.address != newDev.address:
