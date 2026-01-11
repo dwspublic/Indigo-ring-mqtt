@@ -333,6 +333,7 @@ class Plugin(indigo.PluginBase):
                         if "last_update_time" in health:
                             device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.fromtimestamp(health["last_update_time"])))
                         if device.deviceTypeId == "RingMotion":
+                            device.updateStateOnServer(key="motion_duration", value="N/A")
                             if hasattr(dev, "motion_detection"):
                                 if dev.motion_detection:
                                     device.updateStateOnServer(key="motionDetectionEnabled", value="ON")
@@ -345,6 +346,7 @@ class Plugin(indigo.PluginBase):
                         if device.deviceTypeId == "RingMotion" or device.deviceTypeId == "RingDoorbell" or device.deviceTypeId == "RingSiren":
                             device.updateStateOnServer(key="onOffState", value=False)
                         if device.deviceTypeId == "RingCamera":
+                            device.updateStateOnServer(key="stream_Source", value="N/A")
                             device.updateStateImageOnServer(indigo.kStateImageSel.SensorOn)
                             device.updateStateOnServer(key="state", value="Connected")
                             if hasattr(dev, "connection_status"):
@@ -377,6 +379,8 @@ class Plugin(indigo.PluginBase):
                                 device.updateStateOnServer(key="event_recordingUrl1", value=dev.recording_url(dev.last_recording_id))
                                 device.updateStateOnServer(key="event_eventId1", value=dev.last_recording_id)
                         if device.deviceTypeId == "RingLight":
+                            device.updateStateOnServer(key="beam_duration", value="N/A")
+                            device.updateStateOnServer(key="brightness_state", value="N/A")
                             if dev.lights == "on":
                                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
                                 device.updateStateOnServer(key="onOffState", value=True)
@@ -433,12 +437,17 @@ class Plugin(indigo.PluginBase):
                         device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.now()))
                         if device.deviceTypeId == "RingLight":
                             dev.update()
+                            health = dev._health_attrs
+                            device.updateStateOnServer(key="beam_duration", value="N/A")
+                            device.updateStateOnServer(key="brightness_state", value="N/A")
+                            device.updateStateOnServer(key="firmwareStatus", value="N/A")
                             if dev.lights:
                                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
                                 device.updateStateOnServer(key="onOffState", value=True)
                             else:
                                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
                                 device.updateStateOnServer(key="onOffState", value=False)
+                            device.updateStateOnServer(key="status", value="online")
 
     def processMessageNotification(self, notification):
 
