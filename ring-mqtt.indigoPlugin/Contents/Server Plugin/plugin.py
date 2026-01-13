@@ -68,6 +68,8 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"logLevel = {self.logLevel}")
         self.brokerID = pluginPrefs.get("brokerID", "0")
 
+        self.ringPollingFrequency = int(self.pluginPrefs.get("ringPollingFrequency", "60"))
+
         self.logger.debug(f"cffi_check = {str(cffi_check)}")
 
         self._event_loop = None
@@ -121,7 +123,7 @@ class Plugin(indigo.PluginBase):
                     if self.MQTTConnectorDeviceId != 0 and not self.connected:
                         self.connectToMQTTBroker()
 
-                self.sleep(60)  # in seconds
+                self.sleep(self.ringPollingFrequency)  # in seconds
         except self.StopThread:
             self.logger.debug(f"runConcurrentThread - StopThread exception")
             # do any cleanup here
@@ -157,7 +159,7 @@ class Plugin(indigo.PluginBase):
                     self.PyAPIConnectorDeviceId = 0
                 else:
                     self.pyapilisten = True
-                    self._event_loop.create_task(self._async_start())
+                    self.task = self._event_loop.create_task(self._async_start())
                     device.updateStateOnServer(key="status", value="Connected")
             else:
                 self.logger.error(f"Ring token is blank!")
@@ -254,6 +256,29 @@ class Plugin(indigo.PluginBase):
         if device.id in self.ringpyapi_devices:
             self.ringpyapi_devices.remove(device.id)
 
+    def deviceDeleted(self, device):
+        self.logger.info(f"{device.name}: Device Deleted")
+        if device.deviceTypeId == "APIConnector":
+            self.logger.debug(f"deviceDeleted - APIConnector device")
+            if self.task is not None:
+                self.pyapilisten = False
+                self.task.cancel()
+            self.PyAPIConnectorDeviceId = 0
+            cache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".token.cache")
+            if cache_file.is_file():
+                os.remove(cache_file)
+            fcmcache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".fcmtoken.cache")
+            if fcmcache_file.is_file():
+                os.remove(fcmcache_file)
+            return
+        if device.deviceTypeId == "MQTTConnector":
+            self.MQTTConnectorDeviceId = 0
+            return
+        if device.id in self.ringmqtt_devices:
+            self.ringmqtt_devices.remove(device.id)
+        if device.id in self.ringpyapi_devices:
+            self.ringpyapi_devices.remove(device.id)
+
     def token_updated(self, token):
         cache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".token.cache")
         cache_file.write_text(json.dumps(token))
@@ -314,7 +339,16 @@ class Plugin(indigo.PluginBase):
                 t, v, tb = sys.exc_info()
                 self.logger.debug({t, v, tb})
                 self.handle_exception(t, v, tb)
-                self.logger.error(f"pyapiUpdateDevices - connection failure to ring")
+                self.logger.error(f"pyapiUpdateDevices - connection failure to ring - try #1")
+                #return
+
+            try:
+                self.ring.update_data()
+            except Exception:
+                t, v, tb = sys.exc_info()
+                self.logger.debug({t, v, tb})
+                self.handle_exception(t, v, tb)
+                self.logger.error(f"pyapiUpdateDevices - connection failure to ring - try #2")
                 return
 
             devices = self.ring.devices()
@@ -357,7 +391,7 @@ class Plugin(indigo.PluginBase):
                                 if dev.connection_status != "online":
                                     device.updateStateImageOnServer(indigo.kStateImageSel.SensorOff)
                                     device.updateStateOnServer(key="state", value="Not Connected")
-                            if self.pluginPrefs.get("storeSnapShots", False) and self.icount % 5 == 0:
+                            if self.pluginPrefs.get("storeSnapShots", False) and self.icount % int(300/self.ringPollingFrequency) == 0:
                                 if self.pluginPrefs.get("snapshotImagePath", "") == "":
                                     tpath = indigo.server.getInstallFolderPath() + '/Web Assets/public/ring/'
                                     device.updateStateOnServer(key="snapshot_image",
@@ -1405,6 +1439,7 @@ class Plugin(indigo.PluginBase):
         if not userCancelled:
             self.logLevel = int(valuesDict.get("logLevel", logging.INFO))
             self.indigo_log_handler.setLevel(self.logLevel)
+            self.ringPollingFrequency = int(valuesDict.get("ringPollingFrequency", "60"))
 
     def getDuration(self, then, now=datetime.datetime.now(), interval="hours"):
 

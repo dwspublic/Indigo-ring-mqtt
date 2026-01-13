@@ -7,7 +7,7 @@
     <Field id="logLevel" type="menu" defaultValue="20">
         <Label>Event Logging Level:</Label>
         <List>
-            <Option value="5" >Detailed Debugging Messages</Option>
+            <Option value="5">Detailed Debugging Messages</Option>
             <Option value="10">Debugging Messages</Option>
             <Option value="20">Informational Messages</Option>
             <Option value="30">Warning Messages</Option>
@@ -26,6 +26,17 @@
     </Field>
     <Field id="HADNote" type="label" fontSize="small" fontColor="darkgray">
         <Label>HA Discovery asks ring-mqtt to bulk send state messages for all ring devices.  Indigo-ring-mqtt uses these messages to populate the device cache and active indigo device states.</Label>
+    </Field>
+    <Field id="ringPollingFrequency" type="menu" defaultValue="60">
+        <Label>Ring Polling Frequency for API-Connector (in seconds):</Label>
+        <List>
+            <Option value="1">1 Second</Option>
+            <Option value="5">5 Seconds</Option>
+            <Option value="10">10 Seconds</Option>
+            <Option value="15">15 Seconds</Option>
+            <Option value="30">30 Seconds</Option>
+            <Option value="60">60 Seconds</Option>
+        </List>
     </Field>
     <Field id="ringCommAlertHours" type="menu" defaultValue="12">
         <Label>Log Communication Errors after:</Label>
