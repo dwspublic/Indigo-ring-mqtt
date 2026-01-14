@@ -290,7 +290,7 @@ class Plugin(indigo.PluginBase):
             self.ring.update_data()
             devices = self.ring.devices()
 
-            for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots']):
+            for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots'] + devices['authorized_doorbots']):
                 dev.update_health_data()
 
                 if hasattr(dev, 'motion_detection'):
@@ -301,9 +301,9 @@ class Plugin(indigo.PluginBase):
                     self.ring_devices[dev._attrs["location_id"] + "-LA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingLight", "pyapi"]
                 if dev.family == "chimes":
                     self.ring_devices[dev._attrs["location_id"] + "-ZA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingZChime", "pyapi"]
-                if dev.family == "stickup_cams" or dev.family == "doorbots":
+                if dev.family == "stickup_cams" or dev.family == "doorbots" or dev.family == "authorized_doorbots":
                     self.ring_devices[dev._attrs["location_id"] + "-CA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingCamera", "pyapi"]
-                if dev.family == "doorbots":
+                if dev.family == "doorbots" or dev.family == "authorized_doorbots":
                     self.ring_devices[dev._attrs["location_id"] + "-DA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingDoorbell", "pyapi"]
                 if dev.has_capability("battery"):
                     self.ring_battery_devices[dev._attrs["location_id"] + "-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "Battery", "pyapi"]
@@ -338,22 +338,23 @@ class Plugin(indigo.PluginBase):
             except Exception:
                 t, v, tb = sys.exc_info()
                 self.logger.debug({t, v, tb})
-                self.handle_exception(t, v, tb)
-                self.logger.error(f"pyapiUpdateDevices - connection failure to ring - try #1")
+                if "Timeout context manager" not in str(v):
+                    self.handle_exception(t, v, tb)
+                    self.logger.error(f"pyapiUpdateDevices - connection failure to ring - try #1")
                 #return
 
-            try:
-                self.ring.update_data()
-            except Exception:
-                t, v, tb = sys.exc_info()
-                self.logger.debug({t, v, tb})
-                self.handle_exception(t, v, tb)
-                self.logger.error(f"pyapiUpdateDevices - connection failure to ring - try #2")
-                return
+                try:
+                    self.ring.update_data()
+                except Exception:
+                    t, v, tb = sys.exc_info()
+                    self.logger.debug({t, v, tb})
+                    self.handle_exception(t, v, tb)
+                    self.logger.error(f"pyapiUpdateDevices - connection failure to ring - try #2")
+                    return
 
             devices = self.ring.devices()
 
-            for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots']):
+            for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots'] + devices['authorized_doorbots']):
                 dev.update_health_data()
 
                 #motionevents = await dev.async_history(limit=1,kind="motion")
@@ -503,6 +504,8 @@ class Plugin(indigo.PluginBase):
                         device.updateStateOnServer(key="status", value="online")
                         if device.deviceTypeId == "RingMotion":
                             device.updateStateOnServer(key="onOffState", value=False)
+
+        self.logger.debug(f"pyapiUpdateDevices: Retrieve Ring devices through api and update indigo device states - finished")
 
     def processMessageNotification(self, notification):
 
