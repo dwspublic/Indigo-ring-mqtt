@@ -13,4 +13,8 @@
 		<Name>Reload Device Cache</Name>
 		<CallbackMethod>generate_HAD_messages</CallbackMethod>
 	</MenuItem>
+    <MenuItem id="Create_API_Connector">
+		<Name>Create API Connector Device</Name>
+		<CallbackMethod>create_api_connector_device</CallbackMethod>
+	</MenuItem>
 </MenuItems>

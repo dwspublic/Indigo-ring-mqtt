@@ -75,6 +75,15 @@ class Plugin(indigo.PluginBase):
         self._event_loop = None
         self._async_thread = None
         self.user_agent = ""
+        self.apiconndeviceid = int(pluginPrefs.get("apiconndeviceid", "0"))
+        if self.apiconndeviceid == 0:
+            for dev in indigo.devices:
+                if dev.deviceTypeId == "APIConnector":
+                    self.apiconndeviceid = dev.id
+                    self.pluginPrefs["apiconndeviceid"] = str(self.apiconndeviceid)
+                    break
+        self.logger.debug("__init__ - appconndeviceid = " + str(self.apiconndeviceid))
+
         self.apiconndevicerestart = False
         self.icount = 1
 
@@ -140,6 +149,7 @@ class Plugin(indigo.PluginBase):
         self.deviceVersionCheck(device)
         if device.deviceTypeId == "APIConnector":
             device.updateStateOnServer(key="status", value="Not Connected")
+        if device.deviceTypeId == "APIConnector" and self.apiconndeviceid == device.id:
             self.PyAPIConnectorDeviceId = 0
             self.pyapilisten = False
             self.task = None
@@ -164,6 +174,9 @@ class Plugin(indigo.PluginBase):
             else:
                 self.logger.error(f"Ring token is blank!")
                 self.pyapilisten = False
+            return
+        if device.deviceTypeId == "APIConnector" and self.apiconndeviceid != device.id:
+            self.logger.error(f"{device.name}: Device not started - can't have more than one API Connector Device")
             return
         if device.deviceTypeId == "MQTTConnector":
             if self.MQTTConnectorPlugin:
@@ -241,7 +254,7 @@ class Plugin(indigo.PluginBase):
 
     def deviceStopComm(self, device):
         self.logger.info(f"{device.name}: Stopping Device")
-        if device.deviceTypeId == "APIConnector":
+        if device.deviceTypeId == "APIConnector" and self.apiconndeviceid == device.id:
             self.logger.debug(f"deviceStopComm - APIConnector device")
             if self.task is not None:
                 self.pyapilisten = False
@@ -259,17 +272,22 @@ class Plugin(indigo.PluginBase):
     def deviceDeleted(self, device):
         self.logger.info(f"{device.name}: Device Deleted")
         if device.deviceTypeId == "APIConnector":
-            self.logger.debug(f"deviceDeleted - APIConnector device")
-            if self.task is not None:
-                self.pyapilisten = False
-                self.task.cancel()
-            self.PyAPIConnectorDeviceId = 0
-            cache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".token.cache")
-            if cache_file.is_file():
-                os.remove(cache_file)
-            fcmcache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".fcmtoken.cache")
-            if fcmcache_file.is_file():
-                os.remove(fcmcache_file)
+            if self.apiconndeviceid == device.id:
+                self.logger.debug(f"deviceDeleted - APIConnector primary device")
+                if self.task is not None:
+                    self.pyapilisten = False
+                    self.task.cancel()
+                self.PyAPIConnectorDeviceId = 0
+                cache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".token.cache")
+                if cache_file.is_file():
+                    os.remove(cache_file)
+                fcmcache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".fcmtoken.cache")
+                if fcmcache_file.is_file():
+                    os.remove(fcmcache_file)
+                self.apiconndeviceid = 0
+                self.pluginPrefs["apiconndeviceid"] = str(self.apiconndeviceid)
+            else:
+                self.logger.debug(f"deviceDeleted - APIConnector duplicated unused device")
             return
         if device.deviceTypeId == "MQTTConnector":
             self.MQTTConnectorDeviceId = 0
@@ -287,7 +305,25 @@ class Plugin(indigo.PluginBase):
         self.logger.debug(f"pyapiDeviceCache: Retrieve Ring devices through api and update cache")
 
         if self.PyAPIConnectorDeviceId != 0:
-            self.ring.update_data()
+            try:
+                self.ring.update_data()
+            except Exception:
+                t, v, tb = sys.exc_info()
+                self.logger.debug({t, v, tb})
+                if "Timeout context manager" not in str(v):
+                    self.handle_exception(t, v, tb)
+                    self.logger.error(f"pyapiDeviceCache - connection failure to ring - try #1")
+                #return
+
+                try:
+                    self.ring.update_data()
+                except Exception:
+                    t, v, tb = sys.exc_info()
+                    self.logger.debug({t, v, tb})
+                    self.handle_exception(t, v, tb)
+                    self.logger.error(f"pyapiDeviceCache - connection failure to ring - try #2")
+                    return
+
             devices = self.ring.devices()
 
             for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots'] + devices['authorized_doorbots']):
@@ -320,17 +356,16 @@ class Plugin(indigo.PluginBase):
                 if hasattr(dev, 'lights'):
                     self.ring_devices[dev.location_id + "-LA-" + dev.group_id] = [dev.name, "Ring", dev.model, dev.group_id, dev.location_id, "RingLight", "pyapi"]
 
+        self.logger.debug(f"pyapiDeviceCache: Retrieve Ring devices through api and update cache finished")
+
     def pyapiUpdateDevices(self):
         self.logger.debug(f"pyapiUpdateDevices: Retrieve Ring devices through api and update indigo device states")
 
         self.icount = self.icount + 1
         self.logger.debug(f"pyapiUpdateDevices - icount = " + str(self.icount))
         if self.icount == 2:
+            self.logger.debug(f"pyapiUpdateDevices: Retrieve Ring devices through api and update indigo device states skipped")
             return
-        #if self.icount == 3:
-        #    self.pyapilisten = True
-        #    self.task = self._event_loop.create_task(self._async_start())
-        #    return
 
         if self.PyAPIConnectorDeviceId != 0:
             try:
@@ -875,6 +910,24 @@ class Plugin(indigo.PluginBase):
                 retList.append((aID, self.ring_devices[aID][0] + " (" + self.ring_devices[aID][1] + " - " + self.ring_devices[aID][2] + " - " + self.ring_devices[aID][6] + ")"))
         retList.sort(key=lambda tup: tup[1])
         return retList
+
+    def create_api_connector_device(self):
+        if self.apiconndeviceid == 0:
+            # check API-Connector doesn't exist already
+            self.user_agent = "api-" + str(random.randrange(1, 1000000))
+            dev = indigo.device.create(protocol=indigo.kProtocol.Plugin,
+                                 address=self.user_agent,
+                                 name='API-Connector',
+                                 description='',
+                                 pluginId='com.dwsdev.indigoplugin.ring-mqtt',
+                                 deviceTypeId='APIConnector')
+                                 #props={'propA': 'value', 'propB': 'value'})
+            self.apiconndeviceid = dev.device_id
+            self.pluginPrefs["apiconndeviceid"] = str(self.apiconndeviceid)
+            self.logger.info(f"API-Connector device created - device id = {str(self.apiconndeviceid)}")
+        else:
+            self.logger.info(f"API-Connector device NOT created - a API Connector device already exists")
+        return
 
     def convertZeroDate(self, zeroDate=""):
         d1 = datetime.datetime.fromisoformat(zeroDate.replace('Z', '+00:00'))
