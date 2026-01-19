@@ -1929,7 +1929,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug(f"get_last_video retrieved event id = " + str(event['id']))
                 eventid = event['id']
                 try:
-                    self.sleep(2)
+                    self.sleep(10)
                     await doorbell.async_recording_download(eventid, filename=test_file, override=True)
                 except Exception:
                     t, v, tb = sys.exc_info()
