@@ -49,7 +49,7 @@ SNAPSHOT_ENDPOINT = "/clients_api/snapshots/image/{0}"
 SNAPSHOT_TIMESTAMP_ENDPOINT = "/clients_api/snapshots/timestamps"
 
 RINGMQTT_MESSAGE_TYPE = "##ring##"
-kCurDevVersCount = 2  # current version of plugin devices
+kCurDevVersCount = 5  # current version of plugin devices
 
 
 ################################################################################
@@ -86,6 +86,7 @@ class Plugin(indigo.PluginBase):
 
         self.apiconndevicerestart = False
         self.icount = 1
+        self.ringPushEventDeviceID = ""
 
         self.ringmqtt_devices = []
         self.ringpyapi_devices = []
@@ -127,12 +128,26 @@ class Plugin(indigo.PluginBase):
         try:
             while True:
                 if self.PyAPIConnectorDeviceId != 0:
-                    self.pyapiUpdateDevices()
+                    self.logger.debug(f"runConcurrentThread - Before Update Task")
+                    putask = self._event_loop.create_task(self.pyapiUpdateDevices())
+                    #await putask
+                    self.logger.debug(f"runConcurrentThread - After Update Task")
+                    #asyncio.run(self.pyapiUpdateDevices())
+
                 if not self.MQTTConnectorPlugin:
                     if self.MQTTConnectorDeviceId != 0 and not self.connected:
                         self.connectToMQTTBroker()
 
-                self.sleep(self.ringPollingFrequency)  # in seconds
+                for i in range(self.ringPollingFrequency):
+                    if self.icount < 3:
+                        self.sleep(1)
+                        continue
+                    if self.ringPushEventDeviceID != "":
+                        tID = self.ringPushEventDeviceID
+                        self.ringPushEventDeviceID = ""
+                        stask = self._event_loop.create_task(self.pyapiget_snapshot(tID))
+                        #asyncio.run(self.pyapiget_snapshot())
+                    self.sleep(1)  # in seconds
         except self.StopThread:
             self.logger.debug(f"runConcurrentThread - StopThread exception")
             # do any cleanup here
@@ -244,11 +259,15 @@ class Plugin(indigo.PluginBase):
             self.logger.debug(f"{device.name}: Device is current version: {instanceVers}")
         elif instanceVers < kCurDevVersCount:
             # Need to change this section when devices.xml makes critical changes (i.e. add new properties that will get used before edit dialog)
-            if device.deviceTypeId == "APIConnector":
+            newProps = device.pluginProps
+            newProps["devVersCount"] = kCurDevVersCount
+            device.replacePluginPropsOnServer(newProps)
+            if device.deviceTypeId == "RingMotion" or device.deviceTypeId == "RingDoorbell":
                 newProps = device.pluginProps
-                newProps["devVersCount"] = kCurDevVersCount
-                device.replacePluginPropsOnServer(newProps)
-                self.logger.debug(f"{device.name}: Updated device version: {instanceVers} -> {kCurDevVersCount}")
+                if "storeVideo" not in newProps:
+                    newProps["storeVideo"] = "false"
+                    device.replacePluginPropsOnServer(newProps)
+            self.logger.debug(f"{device.name}: Updated device version: {instanceVers} -> {kCurDevVersCount}")
         else:
             self.logger.warning(f"{device.name}: Invalid device version: {instanceVers}")
 
@@ -358,7 +377,42 @@ class Plugin(indigo.PluginBase):
 
         self.logger.debug(f"pyapiDeviceCache: Retrieve Ring devices through api and update cache finished")
 
-    def pyapiUpdateDevices(self):
+    async def pyapiget_snapshot(self, tdeviceID):
+        #self.logger.debug("pyapiget_snapshot start")
+        var = tdeviceID
+        if var != "":
+            self.logger.debug("pyapiget_snapshot - push indigo device with event is " + var)
+            if int(var) not in indigo.devices:
+                self.logger.debug("pyapiget_snapshot - push indigo device does not exist " + var)
+                return
+            device = indigo.devices[int(var)]
+            taddress = device.address
+            rdevicename = self.ring_devices[taddress][0]
+            dev = self.ring.get_device_by_name(rdevicename)
+            if device.deviceTypeId == "RingMotion" or device.deviceTypeId == "RingDoorbell":
+                if self.pluginPrefs.get("storeSnapShots", False):
+                    if self.pluginPrefs.get("snapshotImagePath", "") == "":
+                        tpath = indigo.server.getInstallFolderPath() + '/Web Assets/public/ring/'
+                        device.updateStateOnServer(key="snapshot_image", value="http://localhost:8176/public/ring/" + device.address + ".jpg")
+                    else:
+                        tpath = self.pluginPrefs.get("snapshotImagePath", "")
+                        device.updateStateOnServer(key="snapshot_image", value=tpath + device.address + ".jpg")
+                    if os.path.isdir(tpath):
+                        payloadimage = await self.get_snapshot(dev)
+                        if type(payloadimage) == bytes:
+                            test_file = open(tpath + taddress + '.jpg', 'wb')
+                            test_file.write(payloadimage)
+                            test_file.close()
+                            device.updateStateOnServer(key="snapshot_timestamp", value=str(datetime.datetime.now()))
+                            if device.deviceTypeId == "RingMotion":
+                                device.updateStateOnServer(key="snapshot_type", value="Motion")
+                            else:
+                                device.updateStateOnServer(key="snapshot_type", value="Ding")
+                if device.pluginProps["storeVideo"] == "true":
+                    #asyncio.run(self.get_last_video(dev, device))
+                    await self.get_last_video(dev, device)
+
+    async def pyapiUpdateDevices(self):
         self.logger.debug(f"pyapiUpdateDevices: Retrieve Ring devices through api and update indigo device states")
 
         self.icount = self.icount + 1
@@ -369,17 +423,17 @@ class Plugin(indigo.PluginBase):
 
         if self.PyAPIConnectorDeviceId != 0:
             try:
-                self.ring.update_data()
+                await self.ring.async_update_data()
             except Exception:
                 t, v, tb = sys.exc_info()
                 self.logger.debug({t, v, tb})
-                if "Timeout context manager" not in str(v):
+                if "Timeout context manager" not in str(v) and "Event loop is closed" not in str(v):
                     self.handle_exception(t, v, tb)
                     self.logger.error(f"pyapiUpdateDevices - connection failure to ring - try #1")
                 #return
 
                 try:
-                    self.ring.update_data()
+                    await self.ring.async_update_data()
                 except Exception:
                     t, v, tb = sys.exc_info()
                     self.logger.debug({t, v, tb})
@@ -390,7 +444,7 @@ class Plugin(indigo.PluginBase):
             devices = self.ring.devices()
 
             for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots'] + devices['authorized_doorbots']):
-                dev.update_health_data()
+                await dev.async_update_health_data()
 
                 #motionevents = await dev.async_history(limit=1,kind="motion")
                 #dingevents = await dev.async_history(limit=1,kind="ding")
@@ -437,21 +491,21 @@ class Plugin(indigo.PluginBase):
                                     device.updateStateOnServer(key="snapshot_image",
                                                                value=tpath + device.address + ".jpg")
                                 if os.path.isdir(tpath):
-                                    payloadimage = self.get_snapshot(dev)
+                                    payloadimage = await self.get_snapshot(dev)
                                     if type(payloadimage) == bytes:
                                         test_file = open(tpath + device.address + '.jpg', 'wb')
                                         test_file.write(payloadimage)
                                         test_file.close()
                                         device.updateStateOnServer(key="snapshot_timestamp",value=str(datetime.datetime.now()))
                                         device.updateStateOnServer(key="snapshot_type", value="Interval")
-                            if dev.last_recording_id != device.states["event_eventId1"]:
-                                device.updateStateOnServer(key="event_recordingUrl3", value=device.states["event_recordingUrl2"])
-                                device.updateStateOnServer(key="event_eventId3", value=device.states["event_eventId2"])
-                                device.updateStateOnServer(key="event_recordingUrl2", value=device.states["event_recordingUrl1"])
-                                device.updateStateOnServer(key="event_eventId2", value=device.states["event_eventId1"])
+                            #if dev.last_recording_id != device.states["event_eventId1"]:
+                            #    device.updateStateOnServer(key="event_recordingUrl3", value=device.states["event_recordingUrl2"])
+                            #    device.updateStateOnServer(key="event_eventId3", value=device.states["event_eventId2"])
+                            #    device.updateStateOnServer(key="event_recordingUrl2", value=device.states["event_recordingUrl1"])
+                            #    device.updateStateOnServer(key="event_eventId2", value=device.states["event_eventId1"])
                                 #Implement Try Logic on last recording
-                                device.updateStateOnServer(key="event_recordingUrl1", value=dev.recording_url(dev.last_recording_id))
-                                device.updateStateOnServer(key="event_eventId1", value=dev.last_recording_id)
+                            #    device.updateStateOnServer(key="event_recordingUrl1", value=dev.recording_url(dev.last_recording_id))
+                            #    device.updateStateOnServer(key="event_eventId1", value=dev.last_recording_id)
                         if device.deviceTypeId == "RingLight":
                             device.updateStateOnServer(key="beam_duration", value="N/A")
                             device.updateStateOnServer(key="brightness_state", value="N/A")
@@ -1678,6 +1732,8 @@ class Plugin(indigo.PluginBase):
                     if device.address == taddress:
                         device.updateStateOnServer(key="onOffState", value=True)
                         device.updateStateOnServer(key="lastMotionTime", value=str(t))
+                        splug = indigo.activePlugin
+                        splug.ringPushEventDeviceID = str(device.id)
             elif event.kind == "com.ring.push.HANDLE_NEW_DING":
                 taddress = dev._attrs["location_id"] + "-DA-" + dev.device_id
                 eventid = event.id
@@ -1685,6 +1741,8 @@ class Plugin(indigo.PluginBase):
                     if device.address == taddress:
                         device.updateStateOnServer(key="onOffState", value=True)
                         device.updateStateOnServer(key="lastDingTime", value=str(t))
+                        splug = indigo.activePlugin
+                        splug.ringPushEventDeviceID = str(device.id)
 
             plugin_logger = logging.getLogger("Plugin")
             tLog = "_pyapi_listen _event_handler: " + event.device_name + ": {" + f'"address": "{taddress}", "event.kind": "{event.kind}", "timestamp": "{t}"' + "}"
@@ -1826,23 +1884,23 @@ class Plugin(indigo.PluginBase):
     def handle_exception(self, exc_type, exc_value, exc_traceback):
         self.logger.error(u'Exception trapped:' + str(exc_value))
 
-    def get_snapshot(
+    async def get_snapshot(
         self, doorbell, retries: int = 1, delay: int = 1, filename: str | None = None
     ) -> bytes | None:
         """Take a snapshot and download it."""
         url = SNAPSHOT_TIMESTAMP_ENDPOINT
         payload = {"doorbot_ids": [doorbell._attrs.get("id")]}
-        doorbell._ring.query(url, method="POST", json=payload)
+        await doorbell._ring.async_query(url, method="POST", json=payload)
         request_time = time.time()
         for _ in range(retries):
             time.sleep(delay)
-            resp = doorbell._ring.query(url, method="POST", json=payload)
+            resp = await doorbell._ring.async_query(url, method="POST", json=payload)
             response = resp.json()
             self.logger.debug(f"get_snapshot: request_time=" + str(request_time))
             self.logger.debug(f"get_snapshot: resp.json=" + str(response))
             if response["timestamps"]:
 #           if (response["timestamps"][0]["timestamp"] / 1000 > request_time
-                resp = doorbell._ring.query(
+                resp = await doorbell._ring.async_query(
                     SNAPSHOT_ENDPOINT.format(doorbell._attrs.get("id"))
                 )
                 snapshot = resp.content
@@ -1852,3 +1910,45 @@ class Plugin(indigo.PluginBase):
                     return None
                 return snapshot
         return None
+
+    async def get_last_video(
+                self, doorbell, rmdevice, retries: int = 1, delay: int = 1, filename: str | None = None
+        ) -> bytes | None:
+            self.logger.debug(f"get_last_video start")
+            if self.pluginPrefs.get("snapshotImagePath", "") == "":
+                tpath = indigo.server.getInstallFolderPath() + '/Web Assets/public/ring/'
+            else:
+                tpath = self.pluginPrefs.get("snapshotImagePath", "")
+            taddress = rmdevice.address
+            test_file = tpath + taddress + '.mp4'
+            if rmdevice.deviceTypeId == "RingMotion":
+                tkind = 'motion'
+            else:
+                tkind = 'ding'
+            for event in await doorbell.async_history(limit=1, kind=tkind):
+                self.logger.debug(f"get_last_video retrieved event id = " + str(event['id']))
+                eventid = event['id']
+                try:
+                    self.sleep(2)
+                    await doorbell.async_recording_download(eventid, filename=test_file, override=True)
+                except Exception:
+                    t, v, tb = sys.exc_info()
+                    self.logger.debug({t, v, tb})
+                    if "404" not in str(v):
+                        self.handle_exception(t, v, tb)
+                        self.logger.error(f"get_last_video - connection failure to ring (not 404) - try #1")
+                    # return
+
+                    try:
+                        self.sleep(2)
+                        await doorbell.async_recording_download(eventid, filename=test_file, override=True)
+                    except Exception:
+                        t, v, tb = sys.exc_info()
+                        self.logger.debug({t, v, tb})
+                        self.handle_exception(t, v, tb)
+                        self.logger.error(f"get_last_video - connection failure to ring - try #2")
+                        return
+
+                self.logger.debug(f"get_last_video retrieved and stored file")
+
+            return None

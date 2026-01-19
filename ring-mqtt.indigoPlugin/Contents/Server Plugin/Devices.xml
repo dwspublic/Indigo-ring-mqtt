@@ -171,6 +171,9 @@
 			<Field type="textfield" id="apitype" readonly="true">
 				<Label>API Type (mqtt, pyapi):</Label>
 			</Field>
+    		<Field id="storeVideo" type="checkbox" defaultValue="false">
+        		<Label>Store Video on Motion Event:</Label>
+    		</Field>
 		</ConfigUI>
 		<States>
 			<State id="status">
@@ -202,6 +205,21 @@
 				<ValueType>String</ValueType>
 				<TriggerLabel>firmwareStatus</TriggerLabel>
 				<ControlPageLabel>firmwareStatus</ControlPageLabel>
+			</State>
+			<State id="snapshot_image">
+				<ValueType>String</ValueType>
+				<TriggerLabel>snapshot_image</TriggerLabel>
+				<ControlPageLabel>snapshot_image</ControlPageLabel>
+			</State>
+			<State id="snapshot_timestamp">
+				<ValueType>String</ValueType>
+				<TriggerLabel>snapshot_timestamp</TriggerLabel>
+				<ControlPageLabel>snapshot_timestamp</ControlPageLabel>
+			</State>
+			<State id="snapshot_type">
+				<ValueType>String</ValueType>
+				<TriggerLabel>snapshot_type</TriggerLabel>
+				<ControlPageLabel>snapshot_type</ControlPageLabel>
 			</State>
 			<State id="batteryLevel">
 				<ValueType>String</ValueType>
@@ -328,7 +346,7 @@
 			<Field type="textfield" id="snapshot_interval" readonly="false" defaultValue="3600">
 				<Label>Snapshot Interval (seconds):</Label>
 			</Field>
-		</ConfigUI>
+ 		</ConfigUI>
 		<States>
 			<State id="status">
 				<ValueType>String</ValueType>
@@ -443,6 +461,9 @@
 			<Field type="textfield" id="apitype" readonly="true">
 				<Label>API Type (mqtt, pyapi):</Label>
 			</Field>
+    		<Field id="storeVideo" type="checkbox" defaultValue="false">
+        		<Label>Store Video on Ding Event:</Label>
+    		</Field>
 		</ConfigUI>
 		<States>
 			<State id="status">
@@ -469,6 +490,21 @@
 				<ValueType>String</ValueType>
 				<TriggerLabel>firmwareStatus</TriggerLabel>
 				<ControlPageLabel>firmwareStatus</ControlPageLabel>
+			</State>
+			<State id="snapshot_image">
+				<ValueType>String</ValueType>
+				<TriggerLabel>snapshot_image</TriggerLabel>
+				<ControlPageLabel>snapshot_image</ControlPageLabel>
+			</State>
+			<State id="snapshot_timestamp">
+				<ValueType>String</ValueType>
+				<TriggerLabel>snapshot_timestamp</TriggerLabel>
+				<ControlPageLabel>snapshot_timestamp</ControlPageLabel>
+			</State>
+			<State id="snapshot_type">
+				<ValueType>String</ValueType>
+				<TriggerLabel>snapshot_type</TriggerLabel>
+				<ControlPageLabel>snapshot_type</ControlPageLabel>
 			</State>
 			<State id="batteryLevel">
 				<ValueType>String</ValueType>

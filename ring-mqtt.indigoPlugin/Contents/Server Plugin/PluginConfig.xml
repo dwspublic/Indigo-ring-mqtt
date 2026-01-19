@@ -55,7 +55,7 @@
         <Label>Store Camera Snapshots:</Label>
     </Field>
     <Field id="snapshotImagePath" type="textfield" defaultValue="">
-        <Label>Snapshot Path:</Label>
+        <Label>Snapshot and Video Path:</Label>
     </Field>
     <Field id="SnapshotNote" type="label" fontSize="small" fontColor="darkgray">
         <Label>You can choose to store snapshots on the indigo server and indicate where to store them.  Leave the path blank for indigo webserver (.../Web Assets/public/ring).</Label>
