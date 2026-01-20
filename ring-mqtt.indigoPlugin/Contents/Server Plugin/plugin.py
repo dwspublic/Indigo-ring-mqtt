@@ -445,6 +445,12 @@ class Plugin(indigo.PluginBase):
 
             for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots'] + devices['authorized_doorbots']):
                 await dev.async_update_health_data()
+                # Implement Try Logic on last event logic, especially if no for no subscription
+                lastevent = await dev.async_history(limit=1)
+                lasteventid = lastevent[0]['id']
+                self.logger.debug(f"pyapiUpdateDevices: Last Event ID - " + str(lasteventid))
+                lasteventurl = await dev.async_recording_url(lasteventid)
+                self.logger.debug(f"pyapiUpdateDevices: Last Event URL - " + str(lasteventurl))
 
                 #motionevents = await dev.async_history(limit=1,kind="motion")
                 #dingevents = await dev.async_history(limit=1,kind="ding")
@@ -498,14 +504,13 @@ class Plugin(indigo.PluginBase):
                                         test_file.close()
                                         device.updateStateOnServer(key="snapshot_timestamp",value=str(datetime.datetime.now()))
                                         device.updateStateOnServer(key="snapshot_type", value="Interval")
-                            #if dev.last_recording_id != device.states["event_eventId1"]:
-                            #    device.updateStateOnServer(key="event_recordingUrl3", value=device.states["event_recordingUrl2"])
-                            #    device.updateStateOnServer(key="event_eventId3", value=device.states["event_eventId2"])
-                            #    device.updateStateOnServer(key="event_recordingUrl2", value=device.states["event_recordingUrl1"])
-                            #    device.updateStateOnServer(key="event_eventId2", value=device.states["event_eventId1"])
-                                #Implement Try Logic on last recording
-                            #    device.updateStateOnServer(key="event_recordingUrl1", value=dev.recording_url(dev.last_recording_id))
-                            #    device.updateStateOnServer(key="event_eventId1", value=dev.last_recording_id)
+                            if str(lasteventid) != device.states["event_eventId1"]:
+                                device.updateStateOnServer(key="event_recordingUrl3", value=device.states["event_recordingUrl2"])
+                                device.updateStateOnServer(key="event_eventId3", value=device.states["event_eventId2"])
+                                device.updateStateOnServer(key="event_recordingUrl2", value=device.states["event_recordingUrl1"])
+                                device.updateStateOnServer(key="event_eventId2", value=device.states["event_eventId1"])
+                                device.updateStateOnServer(key="event_recordingUrl1", value=lasteventurl)
+                                device.updateStateOnServer(key="event_eventId1", value=str(lasteventid))
                         if device.deviceTypeId == "RingLight":
                             device.updateStateOnServer(key="beam_duration", value="N/A")
                             device.updateStateOnServer(key="brightness_state", value="N/A")
