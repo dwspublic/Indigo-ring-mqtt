@@ -175,7 +175,8 @@ class Plugin(indigo.PluginBase):
                 self.ring = Ring(auth)
                 self.PyAPIConnectorDeviceId = device.id
                 try:
-                    self.pyapiDeviceCache()
+                    #self.pyapiDeviceCache()
+                    pctask = self._event_loop.create_task(self.pyapiDeviceCache())
                 except Exception:
                     t, v, tb = sys.exc_info()
                     self.logger.debug({t, v, tb})
@@ -187,7 +188,7 @@ class Plugin(indigo.PluginBase):
                     self.task = self._event_loop.create_task(self._async_start())
                     device.updateStateOnServer(key="status", value="Connected")
             else:
-                self.logger.error(f"Ring token is blank!")
+                self.logger.error(f"deviceStartComm - Ring token is blank!")
                 self.pyapilisten = False
             return
         if device.deviceTypeId == "APIConnector" and self.apiconndeviceid != device.id:
@@ -240,10 +241,13 @@ class Plugin(indigo.PluginBase):
             self.ringmqtt_devices.append(device.id)
         if device.id not in self.ringpyapi_devices and device.pluginProps["apitype"] == "pyapi":
             self.ringpyapi_devices.append(device.id)
-        self.deviceRingCacheCheck(device.id)
-        if not device.errorState:
+        es = self.deviceRingCacheCheck(device.id)
+        self.logger.debug(f"deviceStartComm - device.errorState = " + str(device.errorState))
+        #if not device.errorState:
+        if es:
             if device.deviceTypeId == "RingLight":
                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
+                device.updateStateOnServer(key="state", value="off")
             elif device.deviceTypeId == "RingCamera":
                 device.updateStateImageOnServer(indigo.kStateImageSel.SensorOff)
                 device.updateStateOnServer(key="state", value="Not Connected")
@@ -320,12 +324,12 @@ class Plugin(indigo.PluginBase):
         cache_file = Path(indigo.server.getInstallFolderPath() + "/Web Assets/plugins/" + "ring-mqtt-" + self.user_agent + ".token.cache")
         cache_file.write_text(json.dumps(token))
 
-    def pyapiDeviceCache(self):
+    async def pyapiDeviceCache(self):
         self.logger.debug(f"pyapiDeviceCache: Retrieve Ring devices through api and update cache")
 
         if self.PyAPIConnectorDeviceId != 0:
             try:
-                self.ring.update_data()
+                await self.ring.async_update_data()
             except Exception:
                 t, v, tb = sys.exc_info()
                 self.logger.debug({t, v, tb})
@@ -335,7 +339,7 @@ class Plugin(indigo.PluginBase):
                 #return
 
                 try:
-                    self.ring.update_data()
+                    await self.ring.async_update_data()
                 except Exception:
                     t, v, tb = sys.exc_info()
                     self.logger.debug({t, v, tb})
@@ -346,13 +350,14 @@ class Plugin(indigo.PluginBase):
             devices = self.ring.devices()
 
             for dev in list(devices['stickup_cams'] + devices['chimes'] + devices['doorbots'] + devices['authorized_doorbots']):
-                dev.update_health_data()
+                await dev.async_update_health_data()
 
                 if hasattr(dev, 'motion_detection'):
                     self.ring_devices[dev._attrs["location_id"] + "-MA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingMotion", "pyapi"]
                 if hasattr(dev, 'siren'):
                     self.ring_devices[dev._attrs["location_id"] + "-SA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingSiren", "pyapi"]
-                if hasattr(dev, 'lights'):
+                #if hasattr(dev, 'lights'):
+                if dev.has_capability("light"):
                     self.ring_devices[dev._attrs["location_id"] + "-LA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingLight", "pyapi"]
                 if dev.family == "chimes":
                     self.ring_devices[dev._attrs["location_id"] + "-ZA-" + dev.device_id] = [dev.name, "Ring", dev.model, dev.device_id, dev._attrs["location_id"], "RingZChime", "pyapi"]
@@ -367,7 +372,7 @@ class Plugin(indigo.PluginBase):
 
             for group in groups:
                 dev = groups[group]
-                dev.update()
+                await dev.async_update()
                 health = dev._health_attrs
 
                 if hasattr(dev, 'motion_detection') or "motion_notifications_on" in health:
@@ -467,7 +472,7 @@ class Plugin(indigo.PluginBase):
                         break
 
                     # TO-DO add a check if no ring device has been selected
-                    if self.ring_devices[device.address][4] == dev._attrs["location_id"] and self.ring_devices[device.address][3] == dev.device_id:
+                    if device.address in self.ring_devices and self.ring_devices[device.address][4] == dev._attrs["location_id"] and self.ring_devices[device.address][3] == dev.device_id:
                         health = dev._attrs["health"]
                         settings = dev._attrs["settings"]
                         if "last_update_time" in health:
@@ -575,7 +580,7 @@ class Plugin(indigo.PluginBase):
                 for deviceid in self.ringpyapi_devices:
                     device = indigo.devices[deviceid]
 
-                    if self.ring_devices[device.address][4] == dev.location_id and self.ring_devices[device.address][3] == dev.group_id:
+                    if device.address in self.ring_devices and self.ring_devices[device.address][4] == dev.location_id and self.ring_devices[device.address][3] == dev.group_id:
                         device.updateStateOnServer(key="lastUpdate", value=str(datetime.datetime.now()))
                         if device.deviceTypeId == "RingLight":
                             device.updateStateOnServer(key="beam_duration", value="N/A")
@@ -675,14 +680,16 @@ class Plugin(indigo.PluginBase):
         else:
             device.setErrorStateOnServer(u"")
             if device.address not in self.ring_devices:
-                self.logger.error(f"deviceRingCacheCheck - Device Name: {device.name} - Device Address: {device.address}")
+                self.logger.error(f"deviceRingCacheCheck - Device Name: {device.name} - Device Address: {device.address} not in cache")
                 device.setErrorStateOnServer(u"no ack")
+                return False
             else:
                 newProps = device.pluginProps
                 newProps["name"] = self.ring_devices[device.address][0]
                 newProps["manufacturer"] = self.ring_devices[device.address][1]
                 newProps["model"] = self.ring_devices[device.address][2]
                 device.replacePluginPropsOnServer(newProps)
+                return True
 
     def processHADMessage(self, topic_parts, payload):
         self.logger.debug(f"processHADMessage: {'/'.join(topic_parts)}:{payload}")
@@ -1317,7 +1324,8 @@ class Plugin(indigo.PluginBase):
             self.logger.debug(f"Sent topic: haas/status, payload: online to MQTT Broker: {brokerID}")
             self.logger.info(f"MQTT rebuild device cache command sent - devices will be updated shortly")
         if self.PyAPIConnectorDeviceId != 0:
-            self.pyapiDeviceCache()
+            pctask = self._event_loop.create_task(self.pyapiDeviceCache())
+            #self.pyapiDeviceCache()
             self.logger.info(f"PyAPI rebuild device cache command sent - devices updated")
 
         return True
@@ -1451,14 +1459,14 @@ class Plugin(indigo.PluginBase):
             if device.deviceTypeId == "RingZChime":
                 await dev.async_test_sound(kind = 'motion')
             elif device.deviceTypeId == "RingSiren":
-                await dev.async_set_siren(False)
+                await dev.async_set_siren(0)
             elif device.deviceTypeId == "RingLight":
                 if isGroup:
                     await dev.async_set_lights(False)
                     device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
                     device.updateStateOnServer(key="onOffState", value=False)
-                elif dev.family == "stickup_cams" and dev.lights:
-                    await dev.async_lights('off')
+                elif dev.has_capability("light"):
+                    await dev.async_set_lights('off')
                     device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
                     device.updateStateOnServer(key="onOffState", value=False)
         elif action.deviceAction == indigo.kDeviceAction.TurnOn:
@@ -1466,14 +1474,14 @@ class Plugin(indigo.PluginBase):
             if device.deviceTypeId == "RingZChime":
                 await dev.async_test_sound(kind = 'ding')
             elif device.deviceTypeId == "RingSiren":
-                await dev.async_set_siren(True)
+                await dev.async_set_siren(3)
             elif device.deviceTypeId == "RingLight":
                 if isGroup:
                     await dev.async_set_lights(True)
                     device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
                     device.updateStateOnServer(key="onOffState", value=True)
-                elif dev.family == "stickup_cams" and dev.lights:
-                    await dev.async_lights('on')
+                elif dev.has_capability("light"):
+                    await dev.async_set_lights('on')
                     device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
                     device.updateStateOnServer(key="onOffState", value=True)
 
