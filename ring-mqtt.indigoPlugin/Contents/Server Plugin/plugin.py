@@ -447,9 +447,15 @@ class Plugin(indigo.PluginBase):
                 await dev.async_update_health_data()
                 # Implement Try Logic on last event logic, especially if no for no subscription
                 lastevent = await dev.async_history(limit=1)
-                lasteventid = lastevent[0]['id']
+                if len(lastevent) > 0:
+                    lasteventid = lastevent[0]['id']
+                else:
+                    lasteventid = 0
                 self.logger.debug(f"pyapiUpdateDevices: Last Event ID - " + str(lasteventid))
-                lasteventurl = await dev.async_recording_url(lasteventid)
+                if dev.family != "chimes":
+                    lasteventurl = await dev.async_recording_url(lasteventid)
+                else:
+                    lasteventurl = ""
                 self.logger.debug(f"pyapiUpdateDevices: Last Event URL - " + str(lasteventurl))
 
                 #motionevents = await dev.async_history(limit=1,kind="motion")
@@ -561,7 +567,7 @@ class Plugin(indigo.PluginBase):
 
             for group in groups:
                 dev = groups[group]
-                dev.update()
+                await dev.async_update()
                 health = dev._health_attrs
 
                 self.logger.debug(f"pyapiUpdateDevices- Group ID: {dev.group_id}")
@@ -981,7 +987,7 @@ class Plugin(indigo.PluginBase):
                                  pluginId='com.dwsdev.indigoplugin.ring-mqtt',
                                  deviceTypeId='APIConnector')
                                  #props={'propA': 'value', 'propB': 'value'})
-            self.apiconndeviceid = dev.device_id
+            self.apiconndeviceid = dev.id
             self.pluginPrefs["apiconndeviceid"] = str(self.apiconndeviceid)
             self.logger.info(f"API-Connector device created - device id = {str(self.apiconndeviceid)}")
         else:
@@ -1384,7 +1390,8 @@ class Plugin(indigo.PluginBase):
     def actionControlDevice(self, action, device):
 
         if device.pluginProps["apitype"] == "pyapi":
-            self.actionControlDevicePyAPI(action, device)
+            actask = self._event_loop.create_task(self.actionControlDevicePyAPI(action, device))
+            #self.actionControlDevicePyAPI(action, device)
             return
 
         self.logger.debug(f"actionControlDevice: Action: {action.deviceAction} Device: {device.name}")
@@ -1424,7 +1431,7 @@ class Plugin(indigo.PluginBase):
         else:
             self.logger.error(f"{device.name}: actionControlDevice: Unsupported action requested: {action.deviceAction}")
 
-    def actionControlDevicePyAPI(self, action, device):
+    async def actionControlDevicePyAPI(self, action, device):
 
         if self.PyAPIConnectorDeviceId == 0:
             return
@@ -1442,33 +1449,31 @@ class Plugin(indigo.PluginBase):
         if action.deviceAction == indigo.kDeviceAction.TurnOff:
             self.logger.debug(f"actionControlDevicePyAPI: Turn Off {device.name}")
             if device.deviceTypeId == "RingZChime":
-                dev.test_sound(kind = 'motion')
+                await dev.async_test_sound(kind = 'motion')
             elif device.deviceTypeId == "RingSiren":
-                if dev.siren:
-                    dev.siren = "off"
+                await dev.async_set_siren(False)
             elif device.deviceTypeId == "RingLight":
                 if isGroup:
-                    dev.lights = False
+                    await dev.async_set_lights(False)
                     device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
                     device.updateStateOnServer(key="onOffState", value=False)
                 elif dev.family == "stickup_cams" and dev.lights:
-                    dev.lights = "off"
+                    await dev.async_lights('off')
                     device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
                     device.updateStateOnServer(key="onOffState", value=False)
         elif action.deviceAction == indigo.kDeviceAction.TurnOn:
             self.logger.debug(f"actionControlDevicePyAPI: Turn On {device.name}")
             if device.deviceTypeId == "RingZChime":
-                dev.test_sound(kind = 'ding')
+                await dev.async_test_sound(kind = 'ding')
             elif device.deviceTypeId == "RingSiren":
-                if dev.siren:
-                    dev.siren = "on"
+                await dev.async_set_siren(True)
             elif device.deviceTypeId == "RingLight":
                 if isGroup:
-                    dev.lights = True
+                    await dev.async_set_lights(True)
                     device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
                     device.updateStateOnServer(key="onOffState", value=True)
                 elif dev.family == "stickup_cams" and dev.lights:
-                    dev.lights = "on"
+                    await dev.async_lights('on')
                     device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOn)
                     device.updateStateOnServer(key="onOffState", value=True)
 
