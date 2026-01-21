@@ -247,7 +247,7 @@ class Plugin(indigo.PluginBase):
         if es:
             if device.deviceTypeId == "RingLight":
                 device.updateStateImageOnServer(indigo.kStateImageSel.DimmerOff)
-                device.updateStateOnServer(key="state", value="off")
+                device.updateStateOnServer(key="onOffState", value=False)
             elif device.deviceTypeId == "RingCamera":
                 device.updateStateImageOnServer(indigo.kStateImageSel.SensorOff)
                 device.updateStateOnServer(key="state", value="Not Connected")
