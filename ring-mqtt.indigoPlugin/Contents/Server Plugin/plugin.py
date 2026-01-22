@@ -777,7 +777,7 @@ class Plugin(indigo.PluginBase):
         if topic_parts[4] == "motion_duration" and topic_parts[5] == "state" and device.deviceTypeId == "RingMotion":
             device.updateStateOnServer(key="motion_duration", value=payload)
 
-        if topic_parts[4] == "snapshot" and topic_parts[5] == "image" and device.deviceTypeId == "RingCamera":
+        if topic_parts[4] == "snapshot" and topic_parts[5] == "image" and (device.deviceTypeId == "RingCamera" or device.deviceTypeId == "RingDoorbell" or device.deviceTypeId == "RingMotion"):
             self.logger.debug(f"processCMessage: Image Binary {'/'.join(topic_parts)}:{payload} - Device:{device.name}")
             if self.pluginPrefs.get("storeSnapShots", False):
                 if self.pluginPrefs.get("snapshotImagePath", "") == "":
@@ -791,7 +791,7 @@ class Plugin(indigo.PluginBase):
                     test_file.write(payloadimage)
                     test_file.close()
 
-        if topic_parts[4] == "snapshot" and topic_parts[5] == "attributes" and device.deviceTypeId == "RingCamera":
+        if topic_parts[4] == "snapshot" and topic_parts[5] == "attributes" and (device.deviceTypeId == "RingCamera" or device.deviceTypeId == "RingDoorbell" or device.deviceTypeId == "RingMotion"):
             self.logger.debug(f"processCMessage: Image Attributes {'/'.join(topic_parts)}:{payload} - Device:{device.name}")
             p = json.loads(payload)
             device.updateStateOnServer(key="snapshot_timestamp", value=str(datetime.datetime.fromtimestamp(p["timestamp"])))
