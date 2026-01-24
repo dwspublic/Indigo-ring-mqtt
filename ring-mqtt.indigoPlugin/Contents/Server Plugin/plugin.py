@@ -84,6 +84,7 @@ class Plugin(indigo.PluginBase):
                     break
         self.logger.debug("__init__ - appconndeviceid = " + str(self.apiconndeviceid))
 
+        self.indigopluginrestart = False
         self.apiconndevicerestart = False
         self.icount = 1
         self.ringPushEventDeviceID = ""
@@ -128,11 +129,9 @@ class Plugin(indigo.PluginBase):
         try:
             while True:
                 if self.PyAPIConnectorDeviceId != 0:
-                    self.logger.debug(f"runConcurrentThread - Before Update Task")
+                    self.logger.debug(f"runConcurrentThread - pyapiupdatedevices start")
                     putask = self._event_loop.create_task(self.pyapiUpdateDevices())
-                    #await putask
-                    self.logger.debug(f"runConcurrentThread - After Update Task")
-                    #asyncio.run(self.pyapiUpdateDevices())
+                    #await putask - can't do this from sync method
 
                 if not self.MQTTConnectorPlugin:
                     if self.MQTTConnectorDeviceId != 0 and not self.connected:
@@ -175,7 +174,6 @@ class Plugin(indigo.PluginBase):
                 self.ring = Ring(auth)
                 self.PyAPIConnectorDeviceId = device.id
                 try:
-                    #self.pyapiDeviceCache()
                     pctask = self._event_loop.create_task(self.pyapiDeviceCache())
                 except Exception:
                     t, v, tb = sys.exc_info()
@@ -184,6 +182,11 @@ class Plugin(indigo.PluginBase):
                     self.logger.error(f"deviceStartComm - PyAPI Connector Failure")
                     self.PyAPIConnectorDeviceId = 0
                 else:
+                    if self.indigopluginrestart:
+                        # sleep to give pyapidevicecache a chance to finish before restarting
+                        self.sleep(5)
+                        indigo.server.restartPlugin()
+                        return
                     self.pyapilisten = True
                     self.task = self._event_loop.create_task(self._async_start())
                     device.updateStateOnServer(key="status", value="Connected")
@@ -1035,9 +1038,11 @@ class Plugin(indigo.PluginBase):
 
     def didDeviceCommPropertyChange(self, origDev, newDev):
         #self.logger.debug(f"didDeviceCommPropertyChange - device id = {newDev.deviceTypeId}")
+        # change this to restart the entire plugin
         if newDev.deviceTypeId == "APIConnector":
             if self.apiconndevicerestart == True and origDev.address is not None:
                 self.apiconndevicerestart = False
+                self.indigopluginrestart = True
                 return True
         #if origDev.address != newDev.address:
         #    return True
@@ -1249,6 +1254,10 @@ class Plugin(indigo.PluginBase):
         valuesDict["showLoginErrorField"] = "false"
         valuesDict["showAuthCodeField"] = "false"
         valuesDict["authorizationCode"] = ""
+
+        self.ring_devices = {}
+        self.ring_battery_devices = {}
+
         return (True, valuesDict)
 
     def makeConnectionToRing(self, username, password, ringtokenUI, user_agent):
@@ -1618,32 +1627,23 @@ class Plugin(indigo.PluginBase):
 
     def publishChimeAction(self, pluginAction, chimeDevice, callerWaitingForResult):
 
+        if chimeDevice.pluginProps["apitype"] == "pyapi":
+            atask = self._event_loop.create_task(self.publishChimeActionpyapi(pluginAction, chimeDevice))
+            return
+
         brokerID = int(self.brokerID)
         topicType = "chime"
         self.logger.debug(f"{chimeDevice.name}: publishChimeAction")
         if pluginAction.props["volume"] != "":
             payload = indigo.activePlugin.substitute(pluginAction.props["volume"])
-            if chimeDevice.pluginProps["apitype"] == "pyapi":
-                dev = self.ring.get_device_by_name(chimeDevice.pluginProps["name"])
-                dev.volume = int(payload)
-            else:
-                self.publish_topic(brokerID, chimeDevice.name,
+            self.publish_topic(brokerID, chimeDevice.name,
                            f"ring/{self.ring_devices[chimeDevice.address][4]}/{topicType}/{self.ring_devices[chimeDevice.address][3]}/volume/command",
                            payload)
         if pluginAction.props["play_motion_sound"] is True:
             payload = "ON"
-            if chimeDevice.pluginProps["apitype"] == "pyapi":
-                dev = self.ring.get_device_by_name(chimeDevice.pluginProps["name"])
-                dev.test_sound(kind = 'motion')
-            else:
-                self.publish_topic(brokerID, chimeDevice.name,
+            self.publish_topic(brokerID, chimeDevice.name,
                                f"ring/{self.ring_devices[chimeDevice.address][4]}/{topicType}/{self.ring_devices[chimeDevice.address][3]}/play_motion_sound/command",
                                payload)
-
-        if chimeDevice.pluginProps["apitype"] == "pyapi":
-            if pluginAction.props["snooze_minutes"] != "" or pluginAction.props["snooze"] != "":
-                self.logger.info(f"publishChimeAction - Chime snooze property changes are not supported through API Connector")
-            return
 
         if pluginAction.props["snooze_minutes"] != "":
             payload = indigo.activePlugin.substitute(pluginAction.props["snooze_minutes"])
@@ -1655,6 +1655,25 @@ class Plugin(indigo.PluginBase):
             self.publish_topic(brokerID, chimeDevice.name,
                            f"ring/{self.ring_devices[chimeDevice.address][4]}/{topicType}/{self.ring_devices[chimeDevice.address][3]}/snooze/command",
                            payload)
+
+    async def publishChimeActionpyapi(self, pluginAction, chimeDevice):
+
+        self.logger.debug(f"{chimeDevice.name}: publishChimeActionpyapi")
+        if pluginAction.props["volume"] != "":
+            payload = indigo.activePlugin.substitute(pluginAction.props["volume"])
+            self.logger.debug(f"{chimeDevice.name}: publishChimeActionpyapi - volume = {payload}")
+            dev = self.ring.get_device_by_name(chimeDevice.pluginProps["name"])
+            #dev.volume = int(payload)
+            await dev.async_set_volume(int(payload))
+
+        if pluginAction.props["play_motion_sound"] is True:
+            dev = self.ring.get_device_by_name(chimeDevice.pluginProps["name"])
+            #dev.test_sound(kind = 'motion')
+            #await dev.async_test_sound(kind='ding')
+            await dev.async_test_sound(kind='motion')
+
+        if pluginAction.props["snooze_minutes"] != "" or pluginAction.props["snooze"] != "":
+            self.logger.info(f"publishChimeActionpyapi - Chime snooze property changes are not supported through API Connector")
 
     def publishMotionAction(self, pluginAction, motionDevice, callerWaitingForResult):
 
