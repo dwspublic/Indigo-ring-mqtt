@@ -49,7 +49,7 @@ SNAPSHOT_ENDPOINT = "/clients_api/snapshots/image/{0}"
 SNAPSHOT_TIMESTAMP_ENDPOINT = "/clients_api/snapshots/timestamps"
 
 RINGMQTT_MESSAGE_TYPE = "##ring##"
-kCurDevVersCount = 5  # current version of plugin devices
+kCurDevVersCount = 7  # current version of plugin devices
 
 
 ################################################################################
@@ -273,6 +273,11 @@ class Plugin(indigo.PluginBase):
                 newProps = device.pluginProps
                 if "storeVideo" not in newProps:
                     newProps["storeVideo"] = "false"
+                    device.replacePluginPropsOnServer(newProps)
+            if device.deviceTypeId == "RingZChime" or device.deviceTypeId == "RingDoorbell" or device.deviceTypeId == "RingCamera":
+                newProps = device.pluginProps
+                if "device_volume" not in newProps:
+                    newProps["device_volume"] = "5"
                     device.replacePluginPropsOnServer(newProps)
             self.logger.debug(f"{device.name}: Updated device version: {instanceVers} -> {kCurDevVersCount}")
         else:
@@ -525,6 +530,21 @@ class Plugin(indigo.PluginBase):
                                 device.updateStateOnServer(key="event_eventId2", value=device.states["event_eventId1"])
                                 device.updateStateOnServer(key="event_recordingUrl1", value=lasteventurl)
                                 device.updateStateOnServer(key="event_eventId1", value=str(lasteventid))
+                            if "voice_volume" in settings:
+                                device.updateStateOnServer(key="volume", value=str(settings["voice_volume"]))
+                                newProps = device.pluginProps
+                                newProps["device_volume"] = str(settings["voice_volume"])
+                                device.replacePluginPropsOnServer(newProps)
+                        if device.deviceTypeId == "RingDoorbell":
+                            if "doorbell_volume" in settings:
+                                device.updateStateOnServer(key="volume", value=str(settings["doorbell_volume"]))
+                                newProps = device.pluginProps
+                                newProps["device_volume"] = str(settings["doorbell_volume"])
+                                device.replacePluginPropsOnServer(newProps)
+                            if "chime_settings" in settings:
+                                tchime_settings = settings["chime_settings"]
+                                tdur = tchime_settings.get("duration", 0)
+                                device.updateStateOnServer(key="ding_duration", value=str(tdur))
                         if device.deviceTypeId == "RingLight":
                             device.updateStateOnServer(key="beam_duration", value="N/A")
                             device.updateStateOnServer(key="brightness_state", value="N/A")
@@ -540,6 +560,9 @@ class Plugin(indigo.PluginBase):
                         if device.deviceTypeId == "RingZChime":
                             if "volume" in settings:
                                 device.updateStateOnServer(key="volume", value=str(settings["volume"]))
+                                newProps = device.pluginProps
+                                newProps["device_volume"] = str(settings["volume"])
+                                device.replacePluginPropsOnServer(newProps)
                             if "connected" in health and health["connected"]:
                                 device.updateStateOnServer(key="status", value="online")
                             device.updateStateOnServer(key="play_ding_sound", value="Turn On")
@@ -1306,9 +1329,23 @@ class Plugin(indigo.PluginBase):
     def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
         if not userCancelled:
             device = indigo.devices[devId]
-            if device.deviceTypeId == "RingCamera":
+            if device.deviceTypeId == "RingCamera" and valuesDict["apitype"] == "mqtt":
                 self.publishSnapshotProps(device.pluginProps.get("snapshot_mode",""), device.pluginProps.get("snapshot_interval",""), valuesDict["snapshot_mode"], valuesDict["snapshot_interval"], device.name, valuesDict["address"])
+            if (device.deviceTypeId == "RingZChime" or device.deviceTypeId == "RingCamera" or device.deviceTypeId == "RingDoorbell") and valuesDict["apitype"] == "pyapi":
+                vtask = self._event_loop.create_task(self.updateDeviceVolume(device.pluginProps.get("device_volume", ""), valuesDict["device_volume"], valuesDict["name"], valuesDict["address"]))
         return
+
+    async def updateDeviceVolume(self, origdeviceVolume, newdeviceVolume, devName, devAddress):
+
+        self.logger.debug(f"{devName}: updateDeviceVolume start")
+        if newdeviceVolume != "" and origdeviceVolume != newdeviceVolume:
+            payload = newdeviceVolume
+            self.logger.debug(f"{devName}: updateDeviceVolume - volume = {payload}")
+            dev = self.ring.get_device_by_name(devName)
+            # need to change this method for RingCamera - needs update voice_volume
+            await dev.async_set_volume(int(payload))
+        self.logger.debug(f"{devName}: updateDeviceVolume end")
+
     def publishSnapshotProps(self, origsnapshotMode, origsnapshotInterval, newsnapshotMode, newsnapshotInterval, devName, devAddress):
         brokerID = int(self.brokerID)
         topicType = "camera"
@@ -1771,7 +1808,7 @@ class Plugin(indigo.PluginBase):
                         device.updateStateOnServer(key="lastMotionTime", value=str(t))
                         splug = indigo.activePlugin
                         splug.ringPushEventDeviceID = str(device.id)
-            elif event.kind == "com.ring.push.HANDLE_NEW_DING":
+            elif event.kind == "ding":
                 taddress = dev._attrs["location_id"] + "-DA-" + dev.device_id
                 eventid = event.id
                 for device in indigo.devices.iter(u"self"):

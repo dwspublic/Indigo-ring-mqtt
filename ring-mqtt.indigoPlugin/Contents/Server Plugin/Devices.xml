@@ -332,7 +332,23 @@
 			<Field type="textfield" id="apitype" readonly="true">
 				<Label>API Type (mqtt, pyapi):</Label>
 			</Field>
-       	    <Field type="menu" id="snapshot_mode" defaultValue="Auto">
+       	    <Field type="menu" id="device_volume" defaultValue="11">
+        		<Label>Volume (Voice):</Label>
+        		<List>
+        			<Option value="1">1</Option>
+        			<Option value="2">2</Option>
+        			<Option value="3">3</Option>
+        			<Option value="4">4</Option>
+        			<Option value="5">5</Option>
+        			<Option value="6">6</Option>
+        			<Option value="7">7</Option>
+        			<Option value="8">8</Option>
+        			<Option value="9">9</Option>
+        			<Option value="10">10</Option>
+        			<Option value="11">11</Option>
+        		</List>
+        	</Field>
+			<Field type="menu" id="snapshot_mode" defaultValue="Auto" visibleBindingId="apitype" visibleBindingValue="mqtt">
         		<Label>Snapshot Mode:</Label>
         		<List>
         			<Option value="Auto">Auto</Option>
@@ -343,7 +359,7 @@
         			<Option value="Disabled">Disabled</Option>
         		</List>
         	</Field>
-			<Field type="textfield" id="snapshot_interval" readonly="false" defaultValue="3600">
+			<Field type="textfield" id="snapshot_interval" readonly="false" defaultValue="3600" visibleBindingId="apitype" visibleBindingValue="mqtt">
 				<Label>Snapshot Interval (seconds):</Label>
 			</Field>
  		</ConfigUI>
@@ -413,6 +429,11 @@
 				<TriggerLabel>firmwareStatus</TriggerLabel>
 				<ControlPageLabel>firmwareStatus</ControlPageLabel>
 			</State>
+			<State id="volume">
+				<ValueType>String</ValueType>
+				<TriggerLabel>volume</TriggerLabel>
+				<ControlPageLabel>volume</ControlPageLabel>
+			</State>
 			<State id="batteryLevel">
 				<ValueType>String</ValueType>
 				<TriggerLabel>batteryLevel</TriggerLabel>
@@ -461,7 +482,23 @@
 			<Field type="textfield" id="apitype" readonly="true">
 				<Label>API Type (mqtt, pyapi):</Label>
 			</Field>
-    		<Field id="storeVideo" type="checkbox" defaultValue="false">
+       	    <Field type="menu" id="device_volume" defaultValue="5">
+        		<Label>Volume (Ding):</Label>
+        		<List>
+        			<Option value="1">1</Option>
+        			<Option value="2">2</Option>
+        			<Option value="3">3</Option>
+        			<Option value="4">4</Option>
+        			<Option value="5">5</Option>
+        			<Option value="6">6</Option>
+        			<Option value="7">7</Option>
+        			<Option value="8">8</Option>
+        			<Option value="9">9</Option>
+        			<Option value="10">10</Option>
+        			<Option value="11">11</Option>
+        		</List>
+        	</Field>
+			<Field id="storeVideo" type="checkbox" defaultValue="false">
         		<Label>Store Video on Ding Event:</Label>
     		</Field>
 		</ConfigUI>
@@ -506,6 +543,11 @@
 				<TriggerLabel>snapshot_type</TriggerLabel>
 				<ControlPageLabel>snapshot_type</ControlPageLabel>
 			</State>
+			<State id="volume">
+				<ValueType>String</ValueType>
+				<TriggerLabel>volume</TriggerLabel>
+				<ControlPageLabel>volume</ControlPageLabel>
+			</State>
 			<State id="batteryLevel">
 				<ValueType>String</ValueType>
 				<TriggerLabel>batteryLevel</TriggerLabel>
@@ -548,6 +590,22 @@
 			<Field type="textfield" id="apitype" readonly="true">
 				<Label>API Type (mqtt, pyapi):</Label>
 			</Field>
+       	    <Field type="menu" id="device_volume" defaultValue="5">
+        		<Label>Volume (Chime):</Label>
+        		<List>
+        			<Option value="1">1</Option>
+        			<Option value="2">2</Option>
+        			<Option value="3">3</Option>
+        			<Option value="4">4</Option>
+        			<Option value="5">5</Option>
+        			<Option value="6">6</Option>
+        			<Option value="7">7</Option>
+        			<Option value="8">8</Option>
+        			<Option value="9">9</Option>
+        			<Option value="10">10</Option>
+        			<Option value="11">11</Option>
+        		</List>
+        	</Field>
 		</ConfigUI>
 		<States>
 			<State id="status">
